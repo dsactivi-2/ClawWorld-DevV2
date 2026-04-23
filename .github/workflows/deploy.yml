@@ -13,6 +13,7 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME: clawworld/openclaw-teams
   NAMESPACE: openclaw-production
+  STAGING_NAMESPACE: openclaw-staging
   DEPLOYMENT: openclaw-gateway
 
 jobs:
@@ -80,11 +81,72 @@ jobs:
             BUILD_DATE=${{ steps.meta.outputs.labels['org.opencontainers.image.created'] }}
 
   # ---------------------------------------------------------------------------
-  # Job 3 — Deploy to Kubernetes
+  # Job 3 — Deploy to Staging (gate before production)
+  # ---------------------------------------------------------------------------
+  deploy-staging:
+    name: Deploy to Staging
+    needs: build-push
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    environment:
+      name: staging
+      url: https://staging.openclaw.yourdomain.com
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: "v1.29.0"
+
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p "${HOME}/.kube"
+          echo "${{ secrets.KUBECONFIG }}" | base64 -d > "${HOME}/.kube/config"
+          chmod 600 "${HOME}/.kube/config"
+
+      - name: Verify cluster connectivity
+        run: kubectl cluster-info --request-timeout=10s
+
+      - name: Update staging image
+        run: |
+          kubectl set image deployment/${{ env.DEPLOYMENT }} \
+            ${{ env.DEPLOYMENT }}=${{ needs.build-push.outputs.image }} \
+            --namespace="${{ env.STAGING_NAMESPACE }}"
+
+      - name: Wait for staging rollout
+        run: |
+          kubectl rollout status deployment/${{ env.DEPLOYMENT }} \
+            --namespace="${{ env.STAGING_NAMESPACE }}" \
+            --timeout=180s
+
+      - name: Smoke test staging
+        run: |
+          STAGING_URL="http://$(kubectl get svc ${{ env.DEPLOYMENT }} \
+            --namespace='${{ env.STAGING_NAMESPACE }}' \
+            -o jsonpath='{.status.loadBalancer.ingress[0].ip}'):3000"
+          echo "Smoke testing: ${STAGING_URL}/health"
+          for i in 1 2 3; do
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${STAGING_URL}/health" || echo "000")
+            echo "Attempt ${i}: HTTP ${HTTP_CODE}"
+            [[ "${HTTP_CODE}" == "200" ]] && exit 0
+            sleep 10
+          done
+          echo "Staging smoke test failed"
+          exit 1
+
+  # ---------------------------------------------------------------------------
+  # Job 4 — Deploy to Production (requires staging gate passing)
   # ---------------------------------------------------------------------------
   deploy:
-    name: Deploy to Kubernetes
-    needs: build-push
+    name: Deploy to Production
+    needs: [build-push, deploy-staging]
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -164,7 +226,7 @@ jobs:
           echo "| URL | https://openclaw.yourdomain.com |" >> $GITHUB_STEP_SUMMARY
 
   # ---------------------------------------------------------------------------
-  # Job 4 — Slack notification
+  # Job 5 — Slack notification
   # ---------------------------------------------------------------------------
   notify:
     name: Notify Slack
@@ -177,13 +239,13 @@ jobs:
         id: status
         run: |
           if [[ "${{ needs.deploy.result }}" == "success" ]]; then
-            echo "color=good"          >> $GITHUB_OUTPUT
-            echo "emoji=:rocket:"      >> $GITHUB_OUTPUT
+            echo "color=good"            >> $GITHUB_OUTPUT
+            echo "emoji=:rocket:"        >> $GITHUB_OUTPUT
             echo "text=Deploy succeeded" >> $GITHUB_OUTPUT
           else
-            echo "color=danger"        >> $GITHUB_OUTPUT
-            echo "emoji=:red_circle:"  >> $GITHUB_OUTPUT
-            echo "text=Deploy FAILED"  >> $GITHUB_OUTPUT
+            echo "color=danger"          >> $GITHUB_OUTPUT
+            echo "emoji=:red_circle:"    >> $GITHUB_OUTPUT
+            echo "text=Deploy FAILED"    >> $GITHUB_OUTPUT
           fi
 
       - name: Send Slack notification

@@ -35,8 +35,8 @@ const log = createLogger('LangGraphOrchestrator');
 // Model constants
 // ---------------------------------------------------------------------------
 
-const MODEL_BUILDER = 'claude-3-5-sonnet';
-const MODEL_SUPERVISOR = 'claude-3-5-sonnet';
+const MODEL_BUILDER = 'claude-3-5-sonnet-20241022';
+const MODEL_SUPERVISOR = 'claude-3-5-sonnet-20241022';
 
 // ---------------------------------------------------------------------------
 // Retry configuration
@@ -74,15 +74,19 @@ function delay(ms: number): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// Anthropic client helper
+// Anthropic client helper (singleton — one client per process)
 // ---------------------------------------------------------------------------
 
+let _anthropicClient: Anthropic | null = null;
+
 function getAnthropicClient(): Anthropic {
+  if (_anthropicClient) return _anthropicClient;
   const apiKey = process.env['ANTHROPIC_API_KEY'];
   if (!apiKey) {
     throw new Error('ANTHROPIC_API_KEY environment variable is not set');
   }
-  return new Anthropic({ apiKey });
+  _anthropicClient = new Anthropic({ apiKey });
+  return _anthropicClient;
 }
 
 async function callClaude(
