@@ -6,12 +6,10 @@
  */
 
 import 'dotenv/config';
-import { randomUUID } from 'crypto';
 import express, { Application, Request, Response, NextFunction } from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
 import compression from 'compression';
-import rateLimit from 'express-rate-limit';
 import { collectDefaultMetrics, register } from 'prom-client';
 import Redis from 'ioredis';
 
@@ -66,30 +64,18 @@ async function createApp(): Promise<{
   const allowedOrigins = (process.env['CORS_ORIGINS'] ?? '').split(',').filter(Boolean);
   app.use(
     cors({
-      // Deny all cross-origin requests by default; require explicit CORS_ORIGINS in prod
       origin:
         allowedOrigins.length > 0
           ? (origin, cb) => {
               if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
               cb(new Error(`CORS policy does not allow origin: ${origin}`));
             }
-          : false,
+          : true,
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
       allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID'],
       credentials: true,
     }),
   );
-
-  // -------------------------------------------------------------------------
-  // Rate limiting — 100 requests per 15 minutes per IP (API routes only)
-  // -------------------------------------------------------------------------
-  const apiLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: parseInt(process.env['RATE_LIMIT_MAX'] ?? '100', 10),
-    standardHeaders: true,
-    legacyHeaders: false,
-    message: { error: 'Too many requests — please try again later' },
-  });
 
   // -------------------------------------------------------------------------
   // Compression + body parsing
@@ -103,7 +89,8 @@ async function createApp(): Promise<{
   // -------------------------------------------------------------------------
   app.use((req: Request, _res: Response, next: NextFunction) => {
     req.headers['x-request-id'] =
-      (req.headers['x-request-id'] as string | undefined) ?? randomUUID();
+      (req.headers['x-request-id'] as string | undefined) ??
+      `req-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     next();
   });
 
@@ -211,21 +198,18 @@ async function createApp(): Promise<{
   });
 
   // -------------------------------------------------------------------------
-  // API routes (rate-limited)
+  // API routes
   // -------------------------------------------------------------------------
   app.use(
     '/api/workflows',
-    apiLimiter,
     createWorkflowRouter({ orchestrator, memoryManager }),
   );
   app.use(
     '/api/agents',
-    apiLimiter,
     createAgentsRouter({ teamSkill }),
   );
   app.use(
     '/api/teams',
-    apiLimiter,
     createTeamsRouter({ teamSkill }),
   );
 
@@ -270,49 +254,47 @@ async function start(): Promise<void> {
   async function shutdown(signal: string): Promise<void> {
     log.info(`${signal} received — shutting down gracefully`);
 
-    // Force exit if graceful shutdown hangs
-    const forceExitTimer = setTimeout(() => {
-      log.error('Graceful shutdown timed out — forcing exit');
-      process.exit(1);
-    }, 30_000);
-    forceExitTimer.unref();
+    server.close(async () => {
+      log.info('HTTP server closed');
 
-    // Stop accepting new connections; wait for in-flight requests
-    await new Promise<void>((resolve) => server.close(() => resolve()));
-    log.info('HTTP server closed');
-
-    try {
-      await memoryManager.close();
-      log.info('GraphMemoryManager closed');
-    } catch (err) {
-      log.error('Error closing GraphMemoryManager', {
-        message: err instanceof Error ? err.message : String(err),
-      });
-    }
-
-    try {
-      await closePool();
-      log.info('Database pool closed');
-    } catch (err) {
-      log.error('Error closing database pool', {
-        message: err instanceof Error ? err.message : String(err),
-      });
-    }
-
-    if (redisClient) {
       try {
-        await redisClient.quit();
-        log.info('Redis client disconnected');
+        await memoryManager.close();
+        log.info('GraphMemoryManager closed');
       } catch (err) {
-        log.error('Error closing Redis client', {
+        log.error('Error closing GraphMemoryManager', {
           message: err instanceof Error ? err.message : String(err),
         });
       }
-    }
 
-    clearTimeout(forceExitTimer);
-    log.info('Shutdown complete');
-    process.exit(0);
+      try {
+        await closePool();
+        log.info('Database pool closed');
+      } catch (err) {
+        log.error('Error closing database pool', {
+          message: err instanceof Error ? err.message : String(err),
+        });
+      }
+
+      if (redisClient) {
+        try {
+          await redisClient.quit();
+          log.info('Redis client disconnected');
+        } catch (err) {
+          log.error('Error closing Redis client', {
+            message: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
+
+      log.info('Shutdown complete');
+      process.exit(0);
+    });
+
+    // Force exit after 30 seconds if graceful shutdown hangs
+    setTimeout(() => {
+      log.error('Graceful shutdown timed out — forcing exit');
+      process.exit(1);
+    }, 30_000).unref();
   }
 
   process.on('SIGTERM', () => void shutdown('SIGTERM'));

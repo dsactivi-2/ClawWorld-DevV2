@@ -37,12 +37,10 @@ scrape_configs:
 
   # ----------------------------------------------------------
   # Prometheus self-monitoring
-  # NOTE: Inside Docker Compose / Kubernetes, use the service name, not localhost.
-  # The targets below use Docker Compose service names; update for bare-metal.
   # ----------------------------------------------------------
   - job_name: "prometheus"
     static_configs:
-      - targets: ["prometheus:9090"]
+      - targets: ["localhost:9090"]
     metrics_path: /metrics
     scheme: http
 
@@ -56,7 +54,7 @@ scrape_configs:
     scheme: http
     static_configs:
       - targets:
-          - "openclaw-api:3000"
+          - "localhost:3000"
         labels:
           service: "openclaw-gateway"
           component: "api"
@@ -80,7 +78,7 @@ scrape_configs:
     scheme: http
     static_configs:
       - targets:
-          - "postgres-exporter:9187"
+          - "localhost:9187"
         labels:
           service: "postgres"
           component: "database"
@@ -100,7 +98,7 @@ scrape_configs:
     scheme: http
     static_configs:
       - targets:
-          - "redis-exporter:9121"
+          - "localhost:9121"
         labels:
           service: "redis"
           component: "cache"
@@ -120,11 +118,15 @@ scrape_configs:
     scheme: http
     static_configs:
       - targets:
-          - "node-exporter:9100"
+          - "localhost:9100"
         labels:
           service: "node"
           component: "host"
     relabel_configs:
+      - source_labels: [__address__]
+        regex: "([^:]+)(:\\d+)?"
+        target_label: __address__
+        replacement: "${1}:9100"
       - source_labels: [__address__]
         target_label: instance
       - target_label: job
@@ -145,7 +147,7 @@ scrape_configs:
     scheme: http
     static_configs:
       - targets:
-          - "openclaw-api:3000"
+          - "localhost:3000"
         labels:
           service: "openclaw-agents"
           component: "agents"
@@ -163,7 +165,7 @@ scrape_configs:
     scheme: http
     static_configs:
       - targets:
-          - "nginx-exporter:9113"
+          - "localhost:9113"
         labels:
           service: "nginx"
           component: "proxy"

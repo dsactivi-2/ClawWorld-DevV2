@@ -1,7 +1,7 @@
 ---
 id: clawworld-builder
 name: ClawWorld Builder
-model: claude-3-5-sonnet-20241022
+model: claude-3-5-sonnet
 role: BUILDER
 level: 0
 workspace: /var/lib/openclaw/workspace-clawworld-builder
