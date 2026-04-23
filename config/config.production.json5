@@ -1,0 +1,662 @@
+{
+  // ============================================================
+  // openclaw-teams — Production Configuration
+  // Environment: production
+  // Last updated: 2026-04-23
+  // ============================================================
+
+  // ------------------------------------
+  // Application
+  // ------------------------------------
+  app: {
+    name: "openclaw-teams",
+    version: "1.0.0",
+    environment: "production",
+    logLevel: "warn",
+    debugMode: false,
+    timezone: "UTC",
+    instanceId: "${INSTANCE_ID}",
+  },
+
+  // ------------------------------------
+  // API Gateway
+  // ------------------------------------
+  gateway: {
+    host: "0.0.0.0",
+    port: 3000,
+    auth: {
+      mode: "jwt",
+      enabled: true,
+      jwtSecret: "${JWT_SECRET}",
+      jwtExpiresIn: "8h",
+      refreshTokenExpiresIn: "7d",
+      issuer: "openclaw-teams",
+      audience: "openclaw-api",
+    },
+    tls: {
+      enabled: true,
+      certFile: "/etc/ssl/certs/openclaw.crt",
+      keyFile: "/etc/ssl/private/openclaw.key",
+      caFile: "/etc/ssl/certs/ca-bundle.crt",
+      minVersion: "TLSv1.2",
+      ciphers: "ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384",
+    },
+    cors: {
+      enabled: true,
+      origins: [
+        "https://app.openclaw.io",
+        "https://admin.openclaw.io",
+      ],
+      methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+      allowedHeaders: ["Content-Type", "Authorization", "X-Request-ID", "X-Agent-ID"],
+      exposedHeaders: ["X-Request-ID", "X-Rate-Limit-Remaining"],
+      credentials: true,
+      maxAge: 86400,
+    },
+    rateLimiting: {
+      enabled: true,
+      windowMs: 60000,         // 1 minute
+      maxRequests: 200,
+      skipSuccessfulRequests: false,
+      keyGenerator: "ip+userId",
+      store: "redis",
+      tiers: {
+        anonymous: { windowMs: 60000, maxRequests: 30 },
+        authenticated: { windowMs: 60000, maxRequests: 200 },
+        agent: { windowMs: 60000, maxRequests: 1000 },
+      },
+    },
+    session: {
+      store: "redis",
+      secret: "${SESSION_SECRET}",
+      name: "openclaw.sid",
+      ttl: 28800,              // 8 hours in seconds
+      rolling: true,
+      httpOnly: true,
+      secure: true,
+      sameSite: "strict",
+    },
+    timeout: {
+      request: 120000,         // 120 seconds
+      keepAlive: 65000,
+      headers: 30000,
+    },
+    bodyParser: {
+      json: { limit: "5mb" },
+      urlencoded: { limit: "2mb", extended: true },
+    },
+  },
+
+  // ------------------------------------
+  // Agents
+  // ------------------------------------
+  agents: {
+    defaults: {
+      subagents: {
+        maxSpawnDepth: 3,
+        maxChildren: 8,
+        maxConcurrent: 50,
+        spawnTimeout: 30000,
+        heartbeatInterval: 10000,
+      },
+      memory: {
+        type: "postgres",
+        ttl: 86400,            // 24 hours
+        maxEntries: 10000,
+        compressionEnabled: true,
+      },
+      models: {
+        builder: "claude-3-5-sonnet",
+        supervisor: "claude-3-5-sonnet",
+        worker: "claude-3-5-haiku",
+      },
+      costs: {
+        monthlyBudget: 10000,  // USD
+        alertThreshold: 0.80,  // Alert at 80% of budget
+        hardLimit: 0.95,       // Hard stop at 95%
+        trackingGranularity: "per-agent",
+      },
+      retry: {
+        maxAttempts: 3,
+        backoffMs: 1000,
+        backoffMultiplier: 2,
+        maxBackoffMs: 30000,
+      },
+      logging: {
+        logInputs: false,      // Disable in production for privacy
+        logOutputs: false,
+        logToolCalls: true,
+        logCosts: true,
+      },
+    },
+
+    list: [
+      // --- Builders (Tier 1) ---
+      {
+        id: "builder-chief",
+        name: "Chief Builder",
+        type: "builder",
+        model: "claude-3-5-sonnet",
+        description: "Top-level orchestrator responsible for overall system design and delegation",
+        maxConcurrentTasks: 3,
+        tools: ["code_execution", "file_write", "file_read", "web_search", "spawn_agent"],
+        enabled: true,
+        priority: 1,
+      },
+      {
+        id: "builder-architect",
+        name: "Architect Builder",
+        type: "builder",
+        model: "claude-3-5-sonnet",
+        description: "Designs system architecture and creates high-level technical specifications",
+        maxConcurrentTasks: 2,
+        tools: ["file_write", "file_read", "diagram_generate", "spawn_agent"],
+        enabled: true,
+        priority: 2,
+      },
+
+      // --- Supervisors (Tier 2) ---
+      {
+        id: "supervisor-backend",
+        name: "Backend Supervisor",
+        type: "supervisor",
+        model: "claude-3-5-sonnet",
+        description: "Oversees all backend development tasks and coordinates worker agents",
+        maxConcurrentTasks: 5,
+        tools: ["code_execution", "file_write", "file_read", "spawn_agent", "database_query"],
+        enabled: true,
+        priority: 3,
+      },
+      {
+        id: "supervisor-frontend",
+        name: "Frontend Supervisor",
+        type: "supervisor",
+        model: "claude-3-5-sonnet",
+        description: "Oversees UI/UX development and coordinates frontend worker agents",
+        maxConcurrentTasks: 5,
+        tools: ["code_execution", "file_write", "file_read", "spawn_agent"],
+        enabled: true,
+        priority: 3,
+      },
+      {
+        id: "supervisor-qa",
+        name: "QA Supervisor",
+        type: "supervisor",
+        model: "claude-3-5-sonnet",
+        description: "Manages quality assurance workflows and test orchestration",
+        maxConcurrentTasks: 8,
+        tools: ["code_execution", "file_read", "spawn_agent", "test_runner"],
+        enabled: true,
+        priority: 3,
+      },
+      {
+        id: "supervisor-devops",
+        name: "DevOps Supervisor",
+        type: "supervisor",
+        model: "claude-3-5-sonnet",
+        description: "Manages CI/CD pipelines, infrastructure, and deployment workflows",
+        maxConcurrentTasks: 4,
+        tools: ["shell_exec", "file_write", "file_read", "spawn_agent", "kubernetes_api"],
+        enabled: true,
+        priority: 3,
+      },
+      {
+        id: "supervisor-research",
+        name: "Research Supervisor",
+        type: "supervisor",
+        model: "claude-3-5-sonnet",
+        description: "Coordinates research tasks, web searches, and data aggregation",
+        maxConcurrentTasks: 6,
+        tools: ["web_search", "file_write", "file_read", "spawn_agent"],
+        enabled: true,
+        priority: 4,
+      },
+
+      // --- Workers (Tier 3) ---
+      {
+        id: "worker-code-gen",
+        name: "Code Generation Worker",
+        type: "worker",
+        model: "claude-3-5-haiku",
+        description: "Generates boilerplate code, scaffolding, and repetitive code patterns",
+        maxConcurrentTasks: 10,
+        tools: ["file_write", "file_read", "code_execution"],
+        enabled: true,
+        priority: 5,
+      },
+      {
+        id: "worker-code-review",
+        name: "Code Review Worker",
+        type: "worker",
+        model: "claude-3-5-haiku",
+        description: "Performs static code analysis, style checks, and security scanning",
+        maxConcurrentTasks: 10,
+        tools: ["file_read", "code_execution"],
+        enabled: true,
+        priority: 5,
+      },
+      {
+        id: "worker-test-gen",
+        name: "Test Generation Worker",
+        type: "worker",
+        model: "claude-3-5-haiku",
+        description: "Generates unit tests, integration tests, and test fixtures",
+        maxConcurrentTasks: 10,
+        tools: ["file_write", "file_read", "test_runner"],
+        enabled: true,
+        priority: 5,
+      },
+      {
+        id: "worker-docs",
+        name: "Documentation Worker",
+        type: "worker",
+        model: "claude-3-5-haiku",
+        description: "Generates API docs, README files, and inline code comments",
+        maxConcurrentTasks: 8,
+        tools: ["file_write", "file_read"],
+        enabled: true,
+        priority: 6,
+      },
+      {
+        id: "worker-data-processor",
+        name: "Data Processing Worker",
+        type: "worker",
+        model: "claude-3-5-haiku",
+        description: "Handles data transformation, validation, and ETL operations",
+        maxConcurrentTasks: 8,
+        tools: ["database_query", "file_read", "file_write", "code_execution"],
+        enabled: true,
+        priority: 5,
+      },
+      {
+        id: "worker-web-scraper",
+        name: "Web Scraping Worker",
+        type: "worker",
+        model: "claude-3-5-haiku",
+        description: "Performs targeted web searches and structured data extraction",
+        maxConcurrentTasks: 12,
+        tools: ["web_search", "file_write"],
+        enabled: true,
+        priority: 6,
+      },
+      {
+        id: "worker-notification",
+        name: "Notification Worker",
+        type: "worker",
+        model: "claude-3-5-haiku",
+        description: "Sends notifications via Slack, email, and webhook channels",
+        maxConcurrentTasks: 20,
+        tools: ["http_request", "file_read"],
+        enabled: true,
+        priority: 7,
+      },
+    ],
+  },
+
+  // ------------------------------------
+  // Database (PostgreSQL)
+  // ------------------------------------
+  database: {
+    type: "postgres",
+    host: "${DB_HOST}",
+    port: 5432,
+    name: "${DB_NAME}",
+    user: "${DB_USER}",
+    password: "${DB_PASSWORD}",
+    ssl: {
+      enabled: true,
+      rejectUnauthorized: true,
+      ca: "/etc/ssl/certs/rds-ca-bundle.pem",
+    },
+    pool: {
+      min: 10,
+      max: 100,
+      acquireTimeoutMs: 30000,
+      idleTimeoutMs: 600000,
+      createTimeoutMs: 30000,
+      destroyTimeoutMs: 5000,
+      reapIntervalMs: 1000,
+      createRetryIntervalMs: 200,
+    },
+    migrations: {
+      enabled: true,
+      directory: "./sql/migrations",
+      tableName: "knex_migrations",
+      schemaName: "public",
+      runOnStartup: false,     // Run manually in production
+    },
+    queryTimeout: 30000,
+    statementTimeout: 60000,
+    connectionRetry: {
+      attempts: 5,
+      delayMs: 2000,
+    },
+  },
+
+  // ------------------------------------
+  // Redis
+  // ------------------------------------
+  redis: {
+    host: "${REDIS_HOST}",
+    port: 6379,
+    password: "${REDIS_PASSWORD}",
+    db: 0,
+    keyPrefix: "openclaw:",
+    tls: {
+      enabled: true,
+      rejectUnauthorized: true,
+    },
+    persistence: {
+      rdb: {
+        enabled: true,
+        saveIntervals: [
+          { seconds: 900, changes: 1 },
+          { seconds: 300, changes: 10 },
+          { seconds: 60, changes: 10000 },
+        ],
+      },
+      aof: {
+        enabled: true,
+        appendfsync: "everysec",
+      },
+    },
+    cluster: {
+      enabled: false,          // Enable when scaling horizontally
+      nodes: [],
+    },
+    sentinel: {
+      enabled: false,
+      masterName: "openclaw-master",
+      sentinels: [],
+    },
+    retryStrategy: {
+      maxRetries: 10,
+      retryDelayMs: 100,
+      maxRetryDelayMs: 3000,
+    },
+    connectTimeout: 10000,
+    commandTimeout: 5000,
+  },
+
+  // ------------------------------------
+  // Logging
+  // ------------------------------------
+  logging: {
+    level: "warn",
+    format: "json",
+    file: {
+      enabled: true,
+      directory: "/var/log/openclaw",
+      filename: "app-%DATE%.log",
+      datePattern: "YYYY-MM-DD",
+      maxSize: "100m",
+      maxFiles: "30d",
+      zippedArchive: true,
+    },
+    elasticsearch: {
+      enabled: true,
+      node: "${ELASTICSEARCH_URL}",
+      index: "openclaw-logs",
+      auth: {
+        username: "${ELASTICSEARCH_USER}",
+        password: "${ELASTICSEARCH_PASSWORD}",
+      },
+      tls: {
+        enabled: true,
+        rejectUnauthorized: true,
+      },
+      flushInterval: 5000,
+      bufferSize: 500,
+    },
+    errorTracking: {
+      enabled: true,
+      provider: "sentry",
+      dsn: "${SENTRY_DSN}",
+      environment: "production",
+      sampleRate: 1.0,
+      tracesSampleRate: 0.1,
+      attachStacktrace: true,
+      sendDefaultPii: false,
+    },
+    audit: {
+      enabled: true,
+      destination: "postgres",
+      tableName: "audit_log",
+      includeFields: ["actor", "action", "resource", "data", "ip", "created_at"],
+      retentionDays: 365,
+    },
+  },
+
+  // ------------------------------------
+  // Monitoring
+  // ------------------------------------
+  monitoring: {
+    prometheus: {
+      enabled: true,
+      path: "/metrics",
+      port: 9090,
+      collectDefaultMetrics: true,
+      defaultLabels: {
+        app: "openclaw-teams",
+        environment: "production",
+      },
+    },
+    grafana: {
+      enabled: true,
+      url: "${GRAFANA_URL}",
+      apiKey: "${GRAFANA_API_KEY}",
+      dashboards: {
+        agentOverview: "openclaw-agent-overview",
+        systemHealth: "openclaw-system-health",
+        costTracking: "openclaw-cost-tracking",
+      },
+    },
+    healthChecks: {
+      enabled: true,
+      path: "/health",
+      interval: 30000,
+      timeout: 5000,
+      checks: [
+        { name: "database", type: "postgres", critical: true },
+        { name: "redis", type: "redis", critical: true },
+        { name: "agents", type: "http", url: "http://localhost:3000/agents/ping", critical: false },
+      ],
+    },
+    alerting: {
+      enabled: true,
+      channels: [
+        {
+          type: "slack",
+          webhook: "${SLACK_ALERT_WEBHOOK}",
+          severities: ["critical", "high"],
+          channel: "#openclaw-alerts",
+        },
+        {
+          type: "email",
+          recipients: ["ops@openclaw.io"],
+          severities: ["critical"],
+        },
+      ],
+      rules: {
+        highErrorRate: { threshold: 0.05, windowMinutes: 5 },
+        agentTimeout: { thresholdMs: 30000 },
+        budgetAlert: { threshold: 0.80 },
+      },
+    },
+  },
+
+  // ------------------------------------
+  // Backup
+  // ------------------------------------
+  backup: {
+    database: {
+      enabled: true,
+      schedule: "0 2 * * *",   // Daily at 02:00 UTC
+      destination: "s3",
+      s3: {
+        bucket: "${BACKUP_S3_BUCKET}",
+        region: "${AWS_REGION}",
+        prefix: "database/",
+        storageClass: "STANDARD_IA",
+        encryption: "AES256",
+      },
+      retention: {
+        daily: 7,
+        weekly: 4,
+        monthly: 12,
+      },
+      compression: "gzip",
+      notifyOnSuccess: true,
+      notifyOnFailure: true,
+    },
+    agentState: {
+      enabled: true,
+      schedule: "*/15 * * * *", // Every 15 minutes
+      destination: "s3",
+      s3: {
+        bucket: "${BACKUP_S3_BUCKET}",
+        region: "${AWS_REGION}",
+        prefix: "agent-state/",
+        storageClass: "STANDARD",
+      },
+      retention: {
+        hours: 48,
+      },
+    },
+    verification: {
+      enabled: true,
+      schedule: "0 4 * * 0",   // Weekly on Sunday at 04:00 UTC
+      restoreTestBucket: "${RESTORE_TEST_S3_BUCKET}",
+      alertOnFailure: true,
+      notificationChannel: "#openclaw-backups",
+    },
+  },
+
+  // ------------------------------------
+  // Security
+  // ------------------------------------
+  security: {
+    apiKeys: {
+      enabled: true,
+      headerName: "X-API-Key",
+      hashAlgorithm: "sha256",
+      rotationPeriodDays: 90,
+      allowMultipleActive: 2,
+    },
+    rbac: {
+      enabled: true,
+      roles: [
+        {
+          name: "admin",
+          permissions: ["agents:*", "workflows:*", "audit:read", "config:write"],
+        },
+        {
+          name: "operator",
+          permissions: ["agents:read", "agents:execute", "workflows:read", "workflows:execute"],
+        },
+        {
+          name: "viewer",
+          permissions: ["agents:read", "workflows:read", "audit:read"],
+        },
+        {
+          name: "agent",
+          permissions: ["agents:self", "tasks:create", "tasks:read"],
+        },
+      ],
+    },
+    networkPolicy: {
+      allowedIpRanges: ["${ALLOWED_IP_RANGE_1}", "${ALLOWED_IP_RANGE_2}"],
+      blockPrivateRanges: false, // Internal services need private range access
+      trustProxy: true,
+      proxyHops: 2,
+    },
+    encryption: {
+      atRest: {
+        enabled: true,
+        algorithm: "AES-256-GCM",
+        keyId: "${KMS_KEY_ID}",
+        provider: "aws-kms",
+      },
+      inTransit: {
+        enabled: true,
+        tlsMinVersion: "1.2",
+      },
+      secrets: {
+        provider: "aws-secrets-manager",
+        region: "${AWS_REGION}",
+        cacheTtl: 300,
+      },
+    },
+    headers: {
+      contentSecurityPolicy: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'",
+      strictTransportSecurity: "max-age=31536000; includeSubDomains; preload",
+      xFrameOptions: "DENY",
+      xContentTypeOptions: "nosniff",
+      referrerPolicy: "strict-origin-when-cross-origin",
+      permissionsPolicy: "camera=(), microphone=(), geolocation=()",
+    },
+  },
+
+  // ------------------------------------
+  // Integrations
+  // ------------------------------------
+  integrations: {
+    slack: {
+      enabled: true,
+      botToken: "${SLACK_BOT_TOKEN}",
+      signingSecret: "${SLACK_SIGNING_SECRET}",
+      appToken: "${SLACK_APP_TOKEN}",
+      defaultChannel: "#openclaw-general",
+      channels: {
+        alerts: "#openclaw-alerts",
+        deployments: "#openclaw-deployments",
+        agentActivity: "#openclaw-agents",
+        costs: "#openclaw-costs",
+      },
+      retryConfig: {
+        retries: 3,
+        factor: 2,
+        minTimeout: 1000,
+        maxTimeout: 10000,
+      },
+    },
+    github: {
+      enabled: true,
+      appId: "${GITHUB_APP_ID}",
+      privateKey: "${GITHUB_PRIVATE_KEY}",
+      installationId: "${GITHUB_INSTALLATION_ID}",
+      webhookSecret: "${GITHUB_WEBHOOK_SECRET}",
+      org: "openclaw-io",
+      repos: {
+        main: "openclaw-teams",
+        infrastructure: "openclaw-infra",
+      },
+      events: ["push", "pull_request", "workflow_run", "deployment_status"],
+    },
+    email: {
+      enabled: true,
+      provider: "ses",
+      ses: {
+        region: "${AWS_REGION}",
+        accessKeyId: "${SES_ACCESS_KEY_ID}",
+        secretAccessKey: "${SES_SECRET_ACCESS_KEY}",
+        sourceArn: "${SES_SOURCE_ARN}",
+      },
+      from: {
+        name: "OpenClaw Teams",
+        address: "noreply@openclaw.io",
+      },
+      replyTo: "support@openclaw.io",
+      templates: {
+        alertCritical: "openclaw-alert-critical",
+        agentReport: "openclaw-agent-report",
+        budgetWarning: "openclaw-budget-warning",
+        welcome: "openclaw-welcome",
+      },
+      rateLimit: {
+        maxPerSecond: 14,
+        maxPerDay: 50000,
+      },
+    },
+  },
+}

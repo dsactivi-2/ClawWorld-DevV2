@@ -1,0 +1,318 @@
+# ============================================================
+# Prometheus Alert Rules — openclaw-teams (production)
+# ============================================================
+
+groups:
+
+  # ----------------------------------------------------------
+  # Agent Health Alerts
+  # ----------------------------------------------------------
+  - name: agent_health
+    interval: 60s
+    rules:
+
+      # Alert: HighAgentErrorRate
+      # Fires when >5% of agent requests result in errors over a 5-minute window
+      - alert: HighAgentErrorRate
+        expr: |
+          (
+            sum(rate(openclaw_agent_requests_total{status=~"5.."}[5m])) by (agent_id, agent_type)
+            /
+            sum(rate(openclaw_agent_requests_total[5m])) by (agent_id, agent_type)
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          team: platform
+          component: agents
+        annotations:
+          summary: "High agent error rate detected for {{ $labels.agent_id }}"
+          description: >
+            Agent '{{ $labels.agent_id }}' (type: {{ $labels.agent_type }}) has an error rate of
+            {{ $value | humanizePercentage }} over the last 5 minutes.
+            Threshold is 5%. Investigate agent logs and task queue immediately.
+          runbook: "https://wiki.openclaw.io/runbooks/high-agent-error-rate"
+          dashboard: "https://grafana.openclaw.io/d/agents?var-agent_id={{ $labels.agent_id }}"
+
+      # Alert: AgentTimeout
+      # Fires when any agent has a P95 response time >30 seconds
+      - alert: AgentTimeout
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(openclaw_agent_task_duration_seconds_bucket[5m])) by (agent_id, le)
+          ) > 30
+        for: 2m
+        labels:
+          severity: high
+          team: platform
+          component: agents
+        annotations:
+          summary: "Agent timeout detected — P95 latency >30s for {{ $labels.agent_id }}"
+          description: >
+            Agent '{{ $labels.agent_id }}' has a P95 task duration of
+            {{ $value | humanizeDuration }} which exceeds the 30-second threshold.
+            This may indicate a blocked task, slow tool call, or downstream service degradation.
+          runbook: "https://wiki.openclaw.io/runbooks/agent-timeout"
+          dashboard: "https://grafana.openclaw.io/d/agents?var-agent_id={{ $labels.agent_id }}"
+
+      # Alert: AgentDown
+      # Fires when an agent instance has been unreachable for 1 minute
+      - alert: AgentDown
+        expr: |
+          up{job="openclaw-agents"} == 0
+          OR
+          absent(openclaw_agent_heartbeat_timestamp_seconds{}) > 60
+        for: 1m
+        labels:
+          severity: critical
+          team: platform
+          component: agents
+        annotations:
+          summary: "Agent is unreachable — {{ $labels.agent_id | default $labels.instance }}"
+          description: >
+            Agent instance '{{ $labels.agent_id | default $labels.instance }}' has been unreachable
+            for more than 1 minute. Last seen: {{ $value | humanizeTimestamp }}.
+            Check container status, network policies, and agent process logs.
+          runbook: "https://wiki.openclaw.io/runbooks/agent-down"
+          dashboard: "https://grafana.openclaw.io/d/agents"
+
+      # Alert: CostBudgetAlert
+      # Fires when cumulative monthly agent API spend reaches 80% of the $10,000 budget
+      - alert: CostBudgetAlert
+        expr: |
+          (
+            sum(openclaw_agent_api_cost_usd_total) by (environment)
+            /
+            scalar(openclaw_config_monthly_budget_usd)
+          ) > 0.80
+        for: 0m
+        labels:
+          severity: high
+          team: finance
+          component: costs
+        annotations:
+          summary: "Monthly API cost budget at {{ $value | humanizePercentage }}"
+          description: >
+            Cumulative monthly agent API spend has reached {{ $value | humanizePercentage }}
+            of the $10,000 monthly budget (current spend: ${{ printf "%.2f" $value }}).
+            Review agent task volumes and consider rate-limiting non-critical agents.
+          runbook: "https://wiki.openclaw.io/runbooks/cost-budget-alert"
+          dashboard: "https://grafana.openclaw.io/d/costs"
+
+  # ----------------------------------------------------------
+  # Database Alerts
+  # ----------------------------------------------------------
+  - name: database_health
+    interval: 30s
+    rules:
+
+      # Alert: DatabaseConnectionPool
+      # Fires when the Postgres connection pool utilization exceeds 80%
+      - alert: DatabaseConnectionPool
+        expr: |
+          (
+            pg_stat_activity_count{state!="idle"}
+            /
+            pg_settings_max_connections
+          ) > 0.80
+        for: 5m
+        labels:
+          severity: high
+          team: platform
+          component: database
+        annotations:
+          summary: "PostgreSQL connection pool >80% utilized"
+          description: >
+            PostgreSQL connection pool utilization is {{ $value | humanizePercentage }}.
+            Active connections: {{ $labels.active_connections }}, Max: {{ $labels.max_connections }}.
+            Consider increasing pool size, auditing long-running queries, or adding a read replica.
+          runbook: "https://wiki.openclaw.io/runbooks/database-connection-pool"
+          dashboard: "https://grafana.openclaw.io/d/database"
+
+      # Alert: DatabaseReplicationLag
+      # Fires when replication lag exceeds 30 seconds
+      - alert: DatabaseReplicationLag
+        expr: |
+          pg_replication_slots_confirmed_flush_lsn - pg_current_wal_lsn() > 50000000
+        for: 5m
+        labels:
+          severity: high
+          team: platform
+          component: database
+        annotations:
+          summary: "PostgreSQL replication lag is high"
+          description: >
+            PostgreSQL replication lag has exceeded 50MB on slot '{{ $labels.slot_name }}'.
+            This may indicate network issues between primary and replica or replica overload.
+          runbook: "https://wiki.openclaw.io/runbooks/database-replication-lag"
+
+      # Alert: DatabaseDeadlocks
+      # Fires when deadlocks are detected
+      - alert: DatabaseDeadlocks
+        expr: |
+          rate(pg_stat_database_deadlocks[5m]) > 0
+        for: 2m
+        labels:
+          severity: medium
+          team: platform
+          component: database
+        annotations:
+          summary: "PostgreSQL deadlocks detected in database '{{ $labels.datname }}'"
+          description: >
+            Deadlock rate of {{ $value | humanize }} per second detected.
+            Check query patterns and transaction ordering in agent task processing.
+          runbook: "https://wiki.openclaw.io/runbooks/database-deadlocks"
+
+  # ----------------------------------------------------------
+  # System Resource Alerts
+  # ----------------------------------------------------------
+  - name: system_resources
+    interval: 30s
+    rules:
+
+      # Alert: HighMemoryUsage
+      # Fires when host memory utilization exceeds 80%
+      - alert: HighMemoryUsage
+        expr: |
+          (
+            1 - (
+              node_memory_MemAvailable_bytes
+              /
+              node_memory_MemTotal_bytes
+            )
+          ) > 0.80
+        for: 5m
+        labels:
+          severity: high
+          team: platform
+          component: host
+        annotations:
+          summary: "High memory usage on {{ $labels.instance }} — {{ $value | humanizePercentage }}"
+          description: >
+            Host '{{ $labels.instance }}' memory utilization is {{ $value | humanizePercentage }}.
+            Available: {{ node_memory_MemAvailable_bytes | humanize1024 }},
+            Total: {{ node_memory_MemTotal_bytes | humanize1024 }}.
+            Check for memory leaks in agent processes or increase instance memory.
+          runbook: "https://wiki.openclaw.io/runbooks/high-memory-usage"
+          dashboard: "https://grafana.openclaw.io/d/node?var-instance={{ $labels.instance }}"
+
+      # Alert: HighCpuUsage
+      # Fires when CPU usage exceeds 85% for 10 minutes
+      - alert: HighCpuUsage
+        expr: |
+          (
+            1 - avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) by (instance)
+          ) > 0.85
+        for: 10m
+        labels:
+          severity: high
+          team: platform
+          component: host
+        annotations:
+          summary: "High CPU usage on {{ $labels.instance }} — {{ $value | humanizePercentage }}"
+          description: >
+            Host '{{ $labels.instance }}' CPU usage is {{ $value | humanizePercentage }} sustained
+            over 10 minutes. Review agent concurrency limits and consider horizontal scaling.
+          runbook: "https://wiki.openclaw.io/runbooks/high-cpu-usage"
+
+      # Alert: DiskSpaceLow
+      # Fires when disk usage exceeds 85%
+      - alert: DiskSpaceLow
+        expr: |
+          (
+            1 - (
+              node_filesystem_avail_bytes{fstype!~"tmpfs|devtmpfs|overlay"}
+              /
+              node_filesystem_size_bytes{fstype!~"tmpfs|devtmpfs|overlay"}
+            )
+          ) > 0.85
+        for: 5m
+        labels:
+          severity: high
+          team: platform
+          component: host
+        annotations:
+          summary: "Low disk space on {{ $labels.instance }} mount {{ $labels.mountpoint }}"
+          description: >
+            Disk usage on '{{ $labels.mountpoint }}' of host '{{ $labels.instance }}' is
+            {{ $value | humanizePercentage }}. Available: {{ node_filesystem_avail_bytes | humanize1024 }}.
+            Clean up logs, rotate old backups, or expand storage.
+          runbook: "https://wiki.openclaw.io/runbooks/disk-space-low"
+
+  # ----------------------------------------------------------
+  # Redis Alerts
+  # ----------------------------------------------------------
+  - name: redis_health
+    interval: 30s
+    rules:
+
+      # Alert: RedisDown
+      - alert: RedisDown
+        expr: redis_up == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: platform
+          component: redis
+        annotations:
+          summary: "Redis instance is down — {{ $labels.instance }}"
+          description: >
+            Redis instance '{{ $labels.instance }}' has been unreachable for more than 1 minute.
+            Agent session state and rate-limiting will be degraded. Restart Redis or failover to replica.
+          runbook: "https://wiki.openclaw.io/runbooks/redis-down"
+
+      # Alert: RedisHighMemory
+      - alert: RedisHighMemory
+        expr: |
+          (redis_memory_used_bytes / redis_memory_max_bytes) > 0.80
+        for: 5m
+        labels:
+          severity: high
+          team: platform
+          component: redis
+        annotations:
+          summary: "Redis memory usage >80% on {{ $labels.instance }}"
+          description: >
+            Redis is using {{ $value | humanizePercentage }} of its configured maxmemory.
+            Review TTL policies and eviction strategy to prevent OOM errors.
+          runbook: "https://wiki.openclaw.io/runbooks/redis-high-memory"
+
+  # ----------------------------------------------------------
+  # API Gateway Alerts
+  # ----------------------------------------------------------
+  - name: gateway_health
+    interval: 30s
+    rules:
+
+      # Alert: GatewayDown
+      - alert: GatewayDown
+        expr: up{job="openclaw-gateway"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: platform
+          component: gateway
+        annotations:
+          summary: "OpenClaw API Gateway is down"
+          description: >
+            The API Gateway ({{ $labels.instance }}) has been unreachable for more than 1 minute.
+            All inbound API traffic will be unavailable. Immediate action required.
+          runbook: "https://wiki.openclaw.io/runbooks/gateway-down"
+
+      # Alert: HighGatewayLatency
+      - alert: HighGatewayLatency
+        expr: |
+          histogram_quantile(0.99,
+            sum(rate(http_request_duration_seconds_bucket{job="openclaw-gateway"}[5m])) by (le, route)
+          ) > 5
+        for: 5m
+        labels:
+          severity: high
+          team: platform
+          component: gateway
+        annotations:
+          summary: "P99 API latency >5s on route {{ $labels.route }}"
+          description: >
+            P99 response time on route '{{ $labels.route }}' is {{ $value | humanizeDuration }}.
+            Investigate downstream agent performance and database query times.
+          runbook: "https://wiki.openclaw.io/runbooks/high-gateway-latency"

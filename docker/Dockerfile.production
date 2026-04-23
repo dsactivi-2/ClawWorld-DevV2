@@ -1,0 +1,93 @@
+# =============================================================================
+# Dockerfile.production — OpenClaw Teams
+# 3-stage multi-stage build: dependencies → builder → runtime
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Stage 1: dependencies
+# Install ONLY production dependencies so the final node_modules layer is lean.
+# -----------------------------------------------------------------------------
+FROM node:20-alpine AS dependencies
+
+WORKDIR /app
+
+# Install pnpm globally
+RUN npm install -g pnpm@8.15.0
+
+# Copy manifests first for optimal layer caching
+COPY package.json pnpm-lock.yaml ./
+
+# Install production dependencies only (no devDependencies)
+RUN pnpm install --frozen-lockfile --prod
+
+# -----------------------------------------------------------------------------
+# Stage 2: builder
+# Install all dependencies (including dev) and compile TypeScript.
+# -----------------------------------------------------------------------------
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+# Install pnpm globally
+RUN npm install -g pnpm@8.15.0
+
+# Copy manifests
+COPY package.json pnpm-lock.yaml tsconfig.json ./
+
+# Install ALL dependencies (dev + prod) for the TypeScript build
+RUN pnpm install --frozen-lockfile
+
+# Copy source code
+COPY src/ ./src/
+
+# Compile TypeScript → dist/
+RUN pnpm build
+
+# -----------------------------------------------------------------------------
+# Stage 3: runtime
+# Minimal production image — non-root user, only built artefacts.
+# -----------------------------------------------------------------------------
+FROM node:20-alpine AS runtime
+
+# Security & runtime utilities
+RUN apk add --no-cache \
+      ca-certificates \
+      curl \
+      postgresql-client
+
+# Create a non-root user/group
+RUN addgroup -g 1000 appuser && \
+    adduser -u 1000 -G appuser -s /bin/sh -D appuser
+
+WORKDIR /app
+
+# Copy production node_modules from stage 1
+COPY --from=dependencies --chown=appuser:appuser /app/node_modules ./node_modules
+
+# Copy compiled output from stage 2
+COPY --from=builder --chown=appuser:appuser /app/dist ./dist
+
+# Copy runtime-required directories
+COPY --chown=appuser:appuser config/ ./config/
+COPY --chown=appuser:appuser agents/ ./agents/
+COPY --chown=appuser:appuser tools/ ./tools/
+COPY --chown=appuser:appuser package.json ./
+
+# Ensure log directory exists and is writable
+RUN mkdir -p /app/logs && chown appuser:appuser /app/logs
+
+# Switch to non-root user
+USER appuser
+
+# Prometheus metrics port + application port
+EXPOSE 3000 9090
+
+ENV NODE_ENV=production \
+    PORT=3000 \
+    LOG_LEVEL=info
+
+# Health check via the /health endpoint
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+  CMD curl -f http://localhost:3000/health || exit 1
+
+CMD ["node", "dist/index.js"]

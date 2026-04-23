@@ -1,0 +1,174 @@
+# ============================================================
+# Prometheus Configuration — openclaw-teams (production)
+# ============================================================
+
+global:
+  scrape_interval: 15s          # Default scrape interval for all jobs
+  evaluation_interval: 15s      # How often rules are evaluated
+  scrape_timeout: 10s           # Timeout for each scrape
+  external_labels:
+    environment: "production"
+    cluster: "openclaw-prod"
+    region: "us-east-1"
+
+# ============================================================
+# Rule files
+# ============================================================
+rule_files:
+  - "/etc/prometheus/rules/prometheus-alerts.yml"
+  - "/etc/prometheus/rules/*.yml"
+
+# ============================================================
+# Alertmanager configuration
+# ============================================================
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - "alertmanager:9093"
+      scheme: http
+      timeout: 10s
+      api_version: v2
+
+# ============================================================
+# Scrape configurations
+# ============================================================
+scrape_configs:
+
+  # ----------------------------------------------------------
+  # Prometheus self-monitoring
+  # ----------------------------------------------------------
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+    metrics_path: /metrics
+    scheme: http
+
+  # ----------------------------------------------------------
+  # OpenClaw API Gateway
+  # ----------------------------------------------------------
+  - job_name: "openclaw-gateway"
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    metrics_path: /metrics
+    scheme: http
+    static_configs:
+      - targets:
+          - "localhost:3000"
+        labels:
+          service: "openclaw-gateway"
+          component: "api"
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+      - target_label: job
+        replacement: "openclaw-gateway"
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: "go_.*"
+        action: drop
+
+  # ----------------------------------------------------------
+  # PostgreSQL Exporter
+  # ----------------------------------------------------------
+  - job_name: "postgres-exporter"
+    scrape_interval: 30s
+    scrape_timeout: 25s
+    metrics_path: /metrics
+    scheme: http
+    static_configs:
+      - targets:
+          - "localhost:9187"
+        labels:
+          service: "postgres"
+          component: "database"
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+      - target_label: job
+        replacement: "postgres-exporter"
+
+  # ----------------------------------------------------------
+  # Redis Exporter
+  # ----------------------------------------------------------
+  - job_name: "redis-exporter"
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    metrics_path: /metrics
+    scheme: http
+    static_configs:
+      - targets:
+          - "localhost:9121"
+        labels:
+          service: "redis"
+          component: "cache"
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+      - target_label: job
+        replacement: "redis-exporter"
+
+  # ----------------------------------------------------------
+  # Node Exporter (host metrics)
+  # ----------------------------------------------------------
+  - job_name: "node-exporter"
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    metrics_path: /metrics
+    scheme: http
+    static_configs:
+      - targets:
+          - "localhost:9100"
+        labels:
+          service: "node"
+          component: "host"
+    relabel_configs:
+      - source_labels: [__address__]
+        regex: "([^:]+)(:\\d+)?"
+        target_label: __address__
+        replacement: "${1}:9100"
+      - source_labels: [__address__]
+        target_label: instance
+      - target_label: job
+        replacement: "node-exporter"
+    metric_relabel_configs:
+      # Drop high-cardinality filesystem metrics for tmpfs/devtmpfs
+      - source_labels: [fstype]
+        regex: "tmpfs|devtmpfs|devfs|iso9660|overlay|aufs|squashfs"
+        action: drop
+
+  # ----------------------------------------------------------
+  # Agent-level metrics (per-agent scraping)
+  # ----------------------------------------------------------
+  - job_name: "openclaw-agents"
+    scrape_interval: 30s
+    scrape_timeout: 25s
+    metrics_path: /agent/metrics
+    scheme: http
+    static_configs:
+      - targets:
+          - "localhost:3000"
+        labels:
+          service: "openclaw-agents"
+          component: "agents"
+    relabel_configs:
+      - target_label: job
+        replacement: "openclaw-agents"
+
+  # ----------------------------------------------------------
+  # Nginx status metrics (stub_status)
+  # ----------------------------------------------------------
+  - job_name: "nginx-exporter"
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    metrics_path: /metrics
+    scheme: http
+    static_configs:
+      - targets:
+          - "localhost:9113"
+        labels:
+          service: "nginx"
+          component: "proxy"
+    relabel_configs:
+      - target_label: job
+        replacement: "nginx-exporter"

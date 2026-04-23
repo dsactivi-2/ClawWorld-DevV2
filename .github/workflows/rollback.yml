@@ -1,0 +1,178 @@
+name: Rollback
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_version:
+        description: "Target image tag/SHA to roll back to (e.g. abc1234 or v1.2.3). Leave blank to roll back to the previous revision."
+        required: false
+        default: ""
+      namespace:
+        description: "Kubernetes namespace"
+        required: false
+        default: "openclaw-production"
+      reason:
+        description: "Reason for rollback (for audit log)"
+        required: true
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: clawworld/openclaw-teams
+  DEPLOYMENT: openclaw-gateway
+
+jobs:
+  rollback:
+    name: Emergency Rollback
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    environment:
+      name: production
+      url: https://openclaw.yourdomain.com
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Audit log
+        run: |
+          echo "## Rollback triggered" >> $GITHUB_STEP_SUMMARY
+          echo "| | |" >> $GITHUB_STEP_SUMMARY
+          echo "| --- | --- |" >> $GITHUB_STEP_SUMMARY
+          echo "| Triggered by | ${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Target version | \`${{ inputs.target_version || 'previous' }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Namespace | \`${{ inputs.namespace }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Reason | ${{ inputs.reason }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Time | $(date -u) |" >> $GITHUB_STEP_SUMMARY
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: "v1.29.0"
+
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p "${HOME}/.kube"
+          echo "${{ secrets.KUBECONFIG }}" | base64 -d > "${HOME}/.kube/config"
+          chmod 600 "${HOME}/.kube/config"
+
+      - name: Verify cluster connectivity
+        run: kubectl cluster-info --request-timeout=10s
+
+      - name: Show current deployment state
+        run: |
+          echo "=== Current deployment ==="
+          kubectl get deployment ${{ env.DEPLOYMENT }} \
+            --namespace="${{ inputs.namespace }}" -o wide
+
+          echo ""
+          echo "=== Rollout history ==="
+          kubectl rollout history deployment/${{ env.DEPLOYMENT }} \
+            --namespace="${{ inputs.namespace }}"
+
+      - name: Rollback — set image (version specified)
+        if: inputs.target_version != ''
+        run: |
+          TARGET_IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ inputs.target_version }}"
+          echo "Rolling back to: ${TARGET_IMAGE}"
+          kubectl set image deployment/${{ env.DEPLOYMENT }} \
+            ${{ env.DEPLOYMENT }}="${TARGET_IMAGE}" \
+            --namespace="${{ inputs.namespace }}"
+
+      - name: Rollback — undo to previous revision (no version specified)
+        if: inputs.target_version == ''
+        run: |
+          echo "Rolling back to previous revision"
+          kubectl rollout undo deployment/${{ env.DEPLOYMENT }} \
+            --namespace="${{ inputs.namespace }}"
+
+      - name: Wait for rollback rollout
+        run: |
+          kubectl rollout status deployment/${{ env.DEPLOYMENT }} \
+            --namespace="${{ inputs.namespace }}" \
+            --timeout=300s
+
+      - name: Verify rollback success
+        id: verify
+        run: |
+          READY=$(kubectl get deployment ${{ env.DEPLOYMENT }} \
+            --namespace="${{ inputs.namespace }}" \
+            -o jsonpath='{.status.readyReplicas}')
+          DESIRED=$(kubectl get deployment ${{ env.DEPLOYMENT }} \
+            --namespace="${{ inputs.namespace }}" \
+            -o jsonpath='{.spec.replicas}')
+          CURRENT_IMAGE=$(kubectl get deployment ${{ env.DEPLOYMENT }} \
+            --namespace="${{ inputs.namespace }}" \
+            -o jsonpath='{.spec.template.spec.containers[0].image}')
+
+          echo "Ready replicas : ${READY}/${DESIRED}"
+          echo "Active image   : ${CURRENT_IMAGE}"
+          echo "current_image=${CURRENT_IMAGE}" >> $GITHUB_OUTPUT
+
+          if [[ "${READY}" == "${DESIRED}" ]] && [[ "${READY}" != "0" ]]; then
+            echo "Rollback verified successfully"
+          else
+            echo "ERROR: Deployment not healthy after rollback"
+            exit 1
+          fi
+
+      - name: Update rollback summary
+        if: always()
+        run: |
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Result" >> $GITHUB_STEP_SUMMARY
+          echo "| | |" >> $GITHUB_STEP_SUMMARY
+          echo "| --- | --- |" >> $GITHUB_STEP_SUMMARY
+          echo "| Status | ${{ job.status }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Active image | \`${{ steps.verify.outputs.current_image }}\` |" >> $GITHUB_STEP_SUMMARY
+
+      - name: Notify Slack — success
+        if: success()
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          payload: |
+            {
+              "attachments": [
+                {
+                  "color": "warning",
+                  "title": ":rewind: openclaw-teams — Rollback Completed",
+                  "fields": [
+                    { "title": "Triggered by",   "value": "${{ github.actor }}",                                "short": true },
+                    { "title": "Target version", "value": "${{ inputs.target_version || 'previous revision' }}", "short": true },
+                    { "title": "Namespace",      "value": "${{ inputs.namespace }}",                             "short": true },
+                    { "title": "Active image",   "value": "`${{ steps.verify.outputs.current_image }}`",         "short": false },
+                    { "title": "Reason",         "value": "${{ inputs.reason }}",                                "short": false },
+                    { "title": "Workflow",       "value": "<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Run>", "short": false }
+                  ],
+                  "footer": "GitHub Actions"
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+
+      - name: Notify Slack — failure
+        if: failure()
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          payload: |
+            {
+              "attachments": [
+                {
+                  "color": "danger",
+                  "title": ":rotating_light: openclaw-teams — Rollback FAILED",
+                  "fields": [
+                    { "title": "Triggered by",   "value": "${{ github.actor }}",                                "short": true },
+                    { "title": "Target version", "value": "${{ inputs.target_version || 'previous revision' }}", "short": true },
+                    { "title": "Namespace",      "value": "${{ inputs.namespace }}",                             "short": true },
+                    { "title": "Reason",         "value": "${{ inputs.reason }}",                                "short": false },
+                    { "title": "Workflow",       "value": "<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Run>", "short": false }
+                  ],
+                  "footer": "GitHub Actions — IMMEDIATE ATTENTION REQUIRED"
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK

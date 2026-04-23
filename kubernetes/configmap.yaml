@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: openclaw-config
+  namespace: openclaw-production
+  labels:
+    app.kubernetes.io/name: openclaw-teams
+    app.kubernetes.io/component: config
+    app.kubernetes.io/part-of: openclaw
+data:
+  NODE_ENV: "production"
+  PORT: "3000"
+  LOG_LEVEL: "info"
+
+  # PostgreSQL
+  DB_HOST: "postgres-0.postgres.openclaw-production.svc.cluster.local"
+  DB_PORT: "5432"
+  DB_NAME: "openclaw_teams"
+  DB_USER: "openclaw"
+
+  # Redis
+  REDIS_HOST: "redis-0.redis.openclaw-production.svc.cluster.local"
+  REDIS_PORT: "6379"
+
+  # SMTP
+  SMTP_HOST: "smtp.example.com"
+  SMTP_PORT: "587"
+  SMTP_USER: "notifications@example.com"
+
+  # AWS / Backup
+  AWS_REGION: "us-east-1"
+  BACKUP_BUCKET: "openclaw-teams-backups"
+
+  # Application behaviour
+  AGENT_CONCURRENCY: "4"
+  AGENT_TIMEOUT_MS: "120000"
+  MAX_PAYLOAD_BYTES: "10485760"

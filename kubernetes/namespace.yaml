@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: openclaw-production
+  labels:
+    name: openclaw-production
+    app.kubernetes.io/name: openclaw-teams
+    app.kubernetes.io/part-of: openclaw
+    environment: production
+    managed-by: kubectl
