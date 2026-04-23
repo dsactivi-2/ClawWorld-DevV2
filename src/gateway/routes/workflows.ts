@@ -77,29 +77,28 @@ export function createWorkflowRouter(deps: WorkflowRouterDeps): Router {
 
     log.info('Starting workflow', { runKey, inputLength: userInput.length, reqId });
 
-    try {
-      // Run asynchronously — immediately return an accepted response
-      const finalState = await orchestrator.execute(userInput, runKey);
+    // Fire-and-forget — respond 202 immediately; client polls GET /:id for updates
+    setImmediate(async () => {
+      try {
+        const finalState = await orchestrator.execute(userInput, runKey);
+        await memoryManager.saveStateWithHistory(runKey, finalState);
+        log.info('Workflow completed in background', {
+          runKey,
+          deploymentReady: finalState.deploymentReady,
+          errorCount: finalState.errors.length,
+        });
+      } catch (err: unknown) {
+        const message = err instanceof Error ? (err as Error).message : String(err);
+        log.error('Workflow failed in background', { runKey, message });
+      }
+    });
 
-      // Persist to memory
-      await memoryManager.saveStateWithHistory(runKey, finalState);
-
-      return res.status(201).json({
-        id: runKey,
-        status: finalState.deploymentReady ? 'completed' : 'running',
-        currentStep: finalState.currentStep,
-        deploymentReady: finalState.deploymentReady,
-        stepCount: finalState.stepHistory.length,
-        errorCount: finalState.errors.length,
-        startTime: finalState.startTime,
-        endTime: finalState.endTime,
-        requestId: reqId,
-      });
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
-      log.error('Failed to start workflow', { runKey, message, reqId });
-      return res.status(500).json(errorBody('Failed to execute workflow', message, reqId));
-    }
+    return res.status(202).json({
+      id: runKey,
+      status: 'running',
+      message: 'Workflow started. Poll GET /api/workflows/:id for status.',
+      requestId: reqId,
+    });
   });
 
   // -------------------------------------------------------------------------
