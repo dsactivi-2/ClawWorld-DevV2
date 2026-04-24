@@ -181,7 +181,7 @@ const scanK8sSchema = Joi.object({
 // ---------------------------------------------------------------------------
 
 export class SecurityScanError extends Error {
-  constructor(message: string, public readonly cause?: Error) {
+  constructor(message: string, public override readonly cause?: Error) {
     super(message);
     this.name = 'SecurityScanError';
   }
@@ -831,14 +831,14 @@ export class SecurityScanningSkill {
     const sarifRules: SarifRule[] = Array.from(
       new Map(allFindings.map((f) => [f.id.split('-L')[0], f])).values(),
     ).map((f) => ({
-      id: f.id.split('-L')[0],
+      id: f.id.split('-L')[0] ?? f.id,
       name: f.title.replace(/\s+/g, ''),
       shortDescription: { text: f.description },
       properties: { tags: [f.category], severity: f.severity },
     }));
 
     const sarifResults: SarifResult[] = allFindings.map((f) => ({
-      ruleId: f.id.split('-L')[0],
+      ruleId: f.id.split('-L')[0] ?? f.id,
       level: severityToSarifLevel(f.severity),
       message: { text: `${f.title}: ${f.description} Remediation: ${f.remediation}` },
       locations: [

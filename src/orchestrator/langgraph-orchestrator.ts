@@ -15,7 +15,7 @@
  */
 
 import Anthropic from '@anthropic-ai/sdk';
-import { StateGraph, END, MemorySaver } from '@langchain/langgraph';
+import { StateGraph, END, START, MemorySaver } from '@langchain/langgraph';
 import { createLogger } from '../utils/logger';
 import type {
   GraphState,
@@ -199,7 +199,7 @@ Respond ONLY with a valid JSON object matching this schema:
       timestamp: new Date().toISOString(),
       message: error.message,
       retryable: true,
-      stack: error.stack,
+      ...(error.stack !== undefined ? { stack: error.stack } : {}),
     });
     return { currentStep: nodeName, stepHistory, errors };
   }
@@ -307,7 +307,7 @@ Respond ONLY with valid JSON matching this schema:
       timestamp: new Date().toISOString(),
       message: error.message,
       retryable: true,
-      stack: error.stack,
+      ...(error.stack !== undefined ? { stack: error.stack } : {}),
     });
     return { currentStep: nodeName, stepHistory, errors };
   }
@@ -412,7 +412,7 @@ async function spawnBuilderTeams(state: GraphState): Promise<Partial<GraphState>
       timestamp: new Date().toISOString(),
       message: error.message,
       retryable: true,
-      stack: error.stack,
+      ...(error.stack !== undefined ? { stack: error.stack } : {}),
     });
     return { currentStep: nodeName, stepHistory, errors };
   }
@@ -496,7 +496,7 @@ Output ONLY the TypeScript source code — no explanations, no markdown fences.`
             timestamp: new Date().toISOString(),
             message: error.message,
             retryable: true,
-            stack: error.stack,
+            ...(error.stack !== undefined ? { stack: error.stack } : {}),
           },
         ],
         completedAt: new Date().toISOString(),
@@ -625,7 +625,7 @@ Respond ONLY with valid JSON:
       timestamp: new Date().toISOString(),
       message: error.message,
       retryable: true,
-      stack: error.stack,
+      ...(error.stack !== undefined ? { stack: error.stack } : {}),
     });
     return {
       requirements: {
@@ -717,7 +717,7 @@ async function deploySystem(state: GraphState): Promise<Partial<GraphState>> {
       timestamp: new Date().toISOString(),
       message: error.message,
       retryable: false,
-      stack: error.stack,
+      ...(error.stack !== undefined ? { stack: error.stack } : {}),
     });
     return {
       deploymentReady: false,
@@ -830,15 +830,18 @@ export class LangGraphOrchestrator {
     graphBuilder.addNode('validate_and_test', validateAndTest);
     graphBuilder.addNode('deploy_system', deploySystem);
 
-    // Add edges
-    graphBuilder.setEntryPoint('analyze_requirements');
-    graphBuilder.addEdge('analyze_requirements', 'plan_architecture');
-    graphBuilder.addEdge('plan_architecture', 'spawn_builder_teams');
-    graphBuilder.addEdge('spawn_builder_teams', 'build_agents');
-    graphBuilder.addEdge('build_agents', 'validate_and_test');
+    // Add edges — cast to any to work around LangGraph 0.2.x strict generic
+    // inference (addNode() doesn't return a re-typed builder in mutation style).
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const g = graphBuilder as any;
+    g.addEdge(START, 'analyze_requirements');
+    g.addEdge('analyze_requirements', 'plan_architecture');
+    g.addEdge('plan_architecture', 'spawn_builder_teams');
+    g.addEdge('spawn_builder_teams', 'build_agents');
+    g.addEdge('build_agents', 'validate_and_test');
 
     // Conditional edge from validate_and_test
-    graphBuilder.addConditionalEdges(
+    g.addConditionalEdges(
       'validate_and_test',
       routeAfterValidation,
       {
@@ -848,7 +851,7 @@ export class LangGraphOrchestrator {
       },
     );
 
-    graphBuilder.addEdge('deploy_system', END);
+    g.addEdge('deploy_system', END);
 
     return graphBuilder.compile({ checkpointer: this.checkpointer });
   }
@@ -917,7 +920,7 @@ export class LangGraphOrchestrator {
             timestamp: new Date().toISOString(),
             message: error.message,
             retryable: false,
-            stack: error.stack,
+            ...(error.stack !== undefined ? { stack: error.stack } : {}),
           },
         ],
       };

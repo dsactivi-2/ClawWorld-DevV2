@@ -9,7 +9,6 @@ import { EventEmitter } from 'events';
 import { v4 as uuidv4 } from 'uuid';
 import Joi from 'joi';
 import { createLogger } from '../src/utils/logger';
-import type { WorkflowStep } from '../src/types/index';
 
 const logger = createLogger('WorkflowOrchestrationSkill');
 
@@ -279,9 +278,9 @@ export class WorkflowOrchestrationSkill extends EventEmitter {
       steps,
       entryPoint: options.entryPoint ?? steps[0]?.id ?? '',
       exitPoints: options.exitPoints ?? [steps[steps.length - 1]?.id ?? ''],
-      description: options.description,
-      timeoutMs: options.timeoutMs,
-      metadata: options.metadata,
+      ...(options.description !== undefined ? { description: options.description } : {}),
+      ...(options.timeoutMs !== undefined ? { timeoutMs: options.timeoutMs } : {}),
+      ...(options.metadata !== undefined ? { metadata: options.metadata } : {}),
     };
 
     const { error, value } = createWorkflowSchema.validate(raw, { abortEarly: false });
@@ -375,7 +374,9 @@ export class WorkflowOrchestrationSkill extends EventEmitter {
           // Handle paused state — wait until resumed or cancelled
           if (instance.status === 'paused') {
             await this._waitForResume(instance, abortController.signal);
-            if (instance.status === 'cancelled') break;
+            // Cast needed: TypeScript narrows to 'paused' inside this block,
+            // but _waitForResume mutates status asynchronously.
+            if ((instance.status as WorkflowStatus) === 'cancelled') break;
           }
 
           const step = stepMap.get(currentStepId);
@@ -418,7 +419,7 @@ export class WorkflowOrchestrationSkill extends EventEmitter {
       instance.errors.push({
         stepId: instance.currentStepId ?? 'unknown',
         message,
-        stack,
+        ...(stack !== undefined ? { stack } : {}),
         retryable: false,
         timestamp: new Date().toISOString(),
       });
@@ -595,10 +596,11 @@ export class WorkflowOrchestrationSkill extends EventEmitter {
         execRecord.durationMs = Date.now() - t0;
         execRecord.error = err instanceof Error ? err.message : String(err);
 
+        const errStack = err instanceof Error ? err.stack : undefined;
         const workflowError: WorkflowExecutionError = {
           stepId: step.id,
           message: execRecord.error,
-          stack: err instanceof Error ? err.stack : undefined,
+          ...(errStack !== undefined ? { stack: errStack } : {}),
           retryable: step.retryable && attempt < maxAttempts - 1,
           timestamp: new Date().toISOString(),
         };

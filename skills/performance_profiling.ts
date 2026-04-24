@@ -196,7 +196,7 @@ let agentTokensUsed: promClient.Counter<string>;
 let agentCostUsd: promClient.Counter<string>;
 let agentCallErrors: promClient.Counter<string>;
 let workflowDuration: promClient.Histogram<string>;
-let activeWorkflows: promClient.Gauge<string>;
+let _activeWorkflows: promClient.Gauge<string>;
 
 function ensureMetrics(): void {
   if (metricsInitialised) return;

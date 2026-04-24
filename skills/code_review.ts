@@ -104,7 +104,7 @@ const suggestImprovementsSchema = Joi.object({
 // ---------------------------------------------------------------------------
 
 export class CodeReviewError extends Error {
-  constructor(message: string, public readonly cause?: Error) {
+  constructor(message: string, public override readonly cause?: Error) {
     super(message);
     this.name = 'CodeReviewError';
   }
@@ -522,7 +522,7 @@ Return ONLY the JSON array, no additional text.`;
         line: item.line ?? null,
         rule: item.rule ?? 'ai-suggestion',
         message: item.message ?? '',
-        suggestion: item.suggestion,
+        ...(item.suggestion !== undefined ? { suggestion: item.suggestion as string } : {}),
       }));
     } catch (err) {
       throw new CodeReviewError(

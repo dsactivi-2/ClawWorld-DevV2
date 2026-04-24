@@ -203,8 +203,8 @@ export class GitTool {
       if (branchMatch?.[4]) {
         const aheadMatch = branchMatch[4].match(/ahead (\d+)/);
         const behindMatch = branchMatch[4].match(/behind (\d+)/);
-        ahead = aheadMatch ? parseInt(aheadMatch[1], 10) : 0;
-        behind = behindMatch ? parseInt(behindMatch[1], 10) : 0;
+        ahead = aheadMatch ? parseInt(aheadMatch[1] ?? '0', 10) : 0;
+        behind = behindMatch ? parseInt(behindMatch[1] ?? '0', 10) : 0;
       }
 
       const staged: string[] = [];

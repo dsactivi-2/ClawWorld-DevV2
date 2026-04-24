@@ -76,6 +76,9 @@ devDependencies:
   '@types/node':
     specifier: ^22.5.0
     version: 22.19.17
+  '@types/nodemailer':
+    specifier: ^6.4.14
+    version: 6.4.23
   '@types/pg':
     specifier: ^8.11.8
     version: 8.20.0
@@ -1239,6 +1242,12 @@ packages:
     resolution: {integrity: sha512-wGdMcf+vPYM6jikpS/qhg6WiqSV/OhG+jeeHT/KlVqxYfD40iYJf9/AE1uQxVWFvU7MipKRkRv8NSHiCGgPr8Q==}
     dependencies:
       undici-types: 6.21.0
+
+  /@types/nodemailer@6.4.23:
+    resolution: {integrity: sha512-aFV3/NsYFLSx9mbb5gtirBSXJnAlrusoKNuPbxsASWc7vrKLmIrTQRpdcxNcSFL3VW2A2XpeLEavwb2qMi6nlQ==}
+    dependencies:
+      '@types/node': 22.19.17
+    dev: true
 
   /@types/pg@8.20.0:
     resolution: {integrity: sha512-bEPFOaMAHTEP1EzpvHTbmwR8UsFyHSKsRisLIHVMXnpNefSbGA1bD6CVy+qKjGSqmZqNqBDV2azOBo8TgkcVow==}

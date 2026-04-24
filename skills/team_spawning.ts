@@ -8,7 +8,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import Joi from 'joi';
 import { createLogger } from '../src/utils/logger';
-import type { AgentConfig, TeamConfig } from '../src/types/index';
+import type { AgentConfig } from '../src/types/index';
 
 const logger = createLogger('TeamSpawningSkill');
 
@@ -453,7 +453,8 @@ export class TeamSpawningSkill {
       );
     }
 
-    const selectedAgent = idleAgents[0];
+    // idleAgents.length === 0 already checked above — safe to assert non-null
+    const selectedAgent = idleAgents[0]!;
     selectedAgent.status = 'busy';
     selectedAgent.resources.tasksInProgress += 1;
     selectedAgent.resources.lastActivityAt = new Date().toISOString();
