@@ -1,7 +1,7 @@
 ---
 id: skill-optimizer-team
 name: Skill Optimizer Supervisor
-model: claude-3-5-sonnet
+model: claude-sonnet-4-6
 role: SUPERVISOR
 level: 1
 workspace: /var/lib/openclaw/workspace-skill-optimizer-team
@@ -57,7 +57,7 @@ Typical execution flow for a skill optimization cycle:
 - **Validate every change**: Every skill definition change, no matter how small, must pass skill-validator before being committed to the registry.
 - **Prioritize by impact**: Address skills used by multiple agents or critical path agents before single-agent or peripheral skills.
 - **Preserve backward compatibility**: Skill optimizations must not break existing agent behavior. If a rename or restructure is required, flag it as a breaking change and escalate to the Builder.
-- **Skill bloat threshold**: If an agent claims more than 8 skills, flag it for review. Workers should have 2-4 skills maximum. Supervisors 4-6. The Builder 5-8.
+- **Skill bloat threshold**: If an agent claims more than 8 skills, flag it for review. Workers should have 2-5 skills maximum. Supervisors 4-6. The Builder 5-8.
 - **Coverage gaps are non-blocking by default**: Report coverage gaps but do not block build completion unless a gap affects a critical agent responsibility.
 - **Token budget discipline**: skill-analyzer tasks can be broad; constrain them by target scope. Do not run a full registry analysis if only a subset of skills is in scope.
 

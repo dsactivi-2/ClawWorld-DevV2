@@ -1,7 +1,7 @@
 ---
 id: conflict-resolver
 name: Conflict Resolver
-model: claude-3-5-haiku-20241022
+model: claude-haiku-4-5-20251001
 role: WORKER
 level: 2
 workspace: /var/lib/openclaw/workspace-conflict-resolver
@@ -98,7 +98,7 @@ Resolution Artifacts:
 ## Hard Rules
 - Never apply patches directly to agent definition files — produce patches for the supervisor to apply
 - Never resolve a conflict by deleting a skill without supervisor authorization
-- Never issue a patch that modifies more than 3 fields per agent definition without escalation
+- Never issue a patch that modifies more than 5 fields per agent definition without escalation
 - Never provide a resolution without a justification for every proposed change
 - Never ignore cascade effects — always perform cascade analysis before returning a patch
 - Never escalate a conflict without explaining specifically why it cannot be resolved at this level

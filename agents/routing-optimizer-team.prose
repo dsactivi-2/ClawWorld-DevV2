@@ -1,7 +1,7 @@
 ---
 id: routing-optimizer-team
 name: Routing Optimizer Supervisor
-model: claude-3-5-sonnet
+model: claude-sonnet-4-6
 role: SUPERVISOR
 level: 1
 workspace: /var/lib/openclaw/workspace-routing-optimizer-team
@@ -98,7 +98,7 @@ Artifact ID: <artifact-id>
 ## Hard Rules
 - Never finalize a routing configuration that contains a detected routing loop
 - Never assign a Level 2 worker to claude-opus-4-6 without explicit Builder authorization
-- Never reduce coverage below 90% of the test matrix in the name of simplification
+- Never reduce coverage below 95% of the test matrix in the name of simplification
 - Never allow an escalation chain longer than 3 hops in the finalized routing config
 - Never store a routing config that has not passed a full routing-tester run
 - Always document the rationale for any non-default model binding in the configuration artifact

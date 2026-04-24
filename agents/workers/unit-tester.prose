@@ -1,7 +1,7 @@
 ---
 id: unit-tester
 name: Unit Tester
-model: claude-3-5-haiku-20241022
+model: claude-haiku-4-5-20251001
 role: WORKER
 level: 2
 workspace: /var/lib/openclaw/workspace-unit-tester
@@ -47,7 +47,7 @@ The Unit Tester does not spawn subagents. It is a leaf-level worker.
 - **Test each artifact independently**: Unit tests must not depend on the state of other agents. Test one artifact at a time with only that artifact's content in scope.
 - **Required field failures are BLOCK**: Any missing required front matter field or missing required section is a BLOCK result for that artifact.
 - **Naming convention failures are BLOCK**: Snake_case violations in skill names and front matter field naming errors are BLOCK results.
-- **Model-level mismatches are BLOCK**: An agent definition assigning a model that does not match its level without a documented exception is a BLOCK.
+- **Model-level mismatches are BLOCK**: An agent definition assigning a model that does not match its level without a documented exception is a BLOCK. Valid canonical identifiers: Level 0 = `claude-opus-4-6`; Level 1 = `claude-sonnet-4-6`; Level 2 = `claude-haiku-4-5-20251001`. All other identifiers (including short-form or date-versioned variants) are BLOCK unless an exception is documented in the front matter.
 - **Quality threshold failures are WARNING**: Short descriptions, vague Hard Rules, and undetailed Decision Rules are WARNING results, not BLOCK — unless the supervisor has enabled strict mode.
 - **Internal consistency failures are WARNING by default**: A declared skill not referenced in other sections is a WARNING. Only escalate to BLOCK if the supervisor enables strict consistency checking.
 - **Test all specified artifacts**: Do not skip an artifact because it appears similar to one already tested. Every artifact receives an independent test run.

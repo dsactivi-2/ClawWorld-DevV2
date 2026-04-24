@@ -1,7 +1,7 @@
 ---
 id: clawworld-builder
 name: ClawWorld Builder
-model: claude-3-5-sonnet
+model: claude-opus-4-6
 role: BUILDER
 level: 0
 workspace: /var/lib/openclaw/workspace-clawworld-builder
@@ -97,5 +97,5 @@ Next Steps:
 - Never expose raw subagent error payloads to the user without summarization and triage
 - Never modify agent configuration files directly — delegate all file writes to agent-creator via the agent-builder-team
 - Never skip the architecture planning phase even under time pressure
-- Never allow a single team to consume more than 40% of the total monthly token budget
+- Never allow a single team to consume more than 30% of the total monthly token budget
 - Always version artifacts — never overwrite without creating a new version entry

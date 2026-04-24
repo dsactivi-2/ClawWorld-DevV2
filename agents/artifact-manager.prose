@@ -1,8 +1,8 @@
 ---
 id: artifact-manager
 name: Artifact Manager
-model: claude-3-5-sonnet
-role: WORKER
+model: claude-sonnet-4-6
+role: SERVICE
 level: 1
 workspace: /var/lib/openclaw/workspace-artifact-manager
 max_tokens_per_month: 80000
@@ -102,6 +102,7 @@ Results: <count>
 ## Hard Rules
 - Never delete any artifact version — only archive (mark as archived, retain in storage)
 - Never allow a write without an acquired namespace lock
+- Always release the namespace lock after every write, whether the write succeeds or fails
 - Never serve a write request missing required metadata fields
 - Never expose filesystem paths from other agents' workspaces in query results
 - Never allow the artifact index to become inconsistent with actual stored files — validate on every write
