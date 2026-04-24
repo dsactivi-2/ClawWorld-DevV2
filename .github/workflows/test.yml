@@ -29,7 +29,7 @@ jobs:
         env:
           POSTGRES_DB: openclaw_teams_test
           POSTGRES_USER: openclaw
-          POSTGRES_PASSWORD: testpassword
+          POSTGRES_PASSWORD: 78e98cbc18704f3b820e0bfb4da30247266e0d928b44084d4a544f3d63fe629d
         ports:
           - 5432:5432
         options: >-
@@ -50,9 +50,9 @@ jobs:
 
     env:
       NODE_ENV: test
-      DATABASE_URL: postgresql://openclaw:testpassword@localhost:5432/openclaw_teams_test
+      DATABASE_URL: postgresql://openclaw:78e98cbc18704f3b820e0bfb4da30247266e0d928b44084d4a544f3d63fe629d@localhost:5432/openclaw_teams_test
       REDIS_URL: redis://localhost:6379/0
-      JWT_SECRET: test-jwt-secret-that-is-long-enough-for-testing-purposes
+      JWT_SECRET: 512985bcd4debdb9e04aabb0db898ab2b0bc3489a989cb3f6002879ce3933ff7238d97be1b64e01f6c41f7d880a2ca5d92a28d56d8686ff56c47ff39e6f29398
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY_TEST }}
 
     steps:
@@ -79,7 +79,7 @@ jobs:
             psql "$DATABASE_URL" -f "$f"
           done
         env:
-          PGPASSWORD: testpassword
+          PGPASSWORD: 78e98cbc18704f3b820e0bfb4da30247266e0d928b44084d4a544f3d63fe629d
 
       - name: Unit tests
         run: pnpm test:unit
