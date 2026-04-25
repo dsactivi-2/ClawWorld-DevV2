@@ -415,19 +415,29 @@ export class WorkflowOrchestrationSkill extends EventEmitter {
         this.emit('workflow:cancelled', instance);
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      const stack = err instanceof Error ? err.stack : undefined;
-      instance.status = 'failed';
-      instance.completedAt = new Date().toISOString();
-      instance.errors.push({
-        stepId: instance.currentStepId ?? 'unknown',
-        message,
-        ...(stack !== undefined ? { stack } : {}),
-        retryable: false,
-        timestamp: new Date().toISOString(),
-      });
-      logger.error('Workflow failed', { instanceId, message });
-      this.emit('workflow:failed', instance, err);
+      if (abortController.signal.aborted) {
+        // AbortController fired → treat as cancellation, not failure
+        if (instance.status !== 'cancelled') {
+          instance.status = 'cancelled';
+        }
+        instance.completedAt = new Date().toISOString();
+        logger.warn('Workflow cancelled via abort', { instanceId });
+        this.emit('workflow:cancelled', instance);
+      } else {
+        const message = err instanceof Error ? err.message : String(err);
+        const stack = err instanceof Error ? err.stack : undefined;
+        instance.status = 'failed';
+        instance.completedAt = new Date().toISOString();
+        instance.errors.push({
+          stepId: instance.currentStepId ?? 'unknown',
+          message,
+          ...(stack !== undefined ? { stack } : {}),
+          retryable: false,
+          timestamp: new Date().toISOString(),
+        });
+        logger.error('Workflow failed', { instanceId, message });
+        this.emit('workflow:failed', instance, err);
+      }
     } finally {
       this.abortControllers.delete(instanceId);
     }
@@ -578,7 +588,18 @@ export class WorkflowOrchestrationSkill extends EventEmitter {
         if (step.timeoutMs != null && step.timeoutMs > 0) {
           promise = timeout(promise, step.timeoutMs, step.id);
         }
-        const output = await promise;
+        // Race step against abort signal so cancelWorkflow() terminates immediately
+        const abortRace = new Promise<never>((_, reject) => {
+          if (signal.aborted) {
+            reject(new Error('Step aborted: workflow was cancelled'));
+            return;
+          }
+          const onAbort = (): void => {
+            reject(new Error('Step aborted: workflow was cancelled'));
+          };
+          signal.addEventListener('abort', onAbort, { once: true });
+        });
+        const output = await Promise.race([promise, abortRace]);
 
         execRecord.status = 'completed';
         execRecord.output = output;
