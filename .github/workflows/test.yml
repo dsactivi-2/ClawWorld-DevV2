@@ -91,10 +91,42 @@ jobs:
         env:
           CI: "true"
 
+      - name: Build for E2E
+        run: pnpm build
+
+      - name: Start server for E2E
+        run: |
+          node dist/src/index.js &
+          echo $! > /tmp/server.pid
+          # Wait for the health endpoint (up to 30s)
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3000/health > /dev/null 2>&1; then
+              echo "Server is up after ${i}s"
+              break
+            fi
+            if [ "$i" -eq 30 ]; then
+              echo "Server failed to start within 30s"
+              exit 1
+            fi
+            sleep 1
+          done
+        env:
+          NODE_ENV: test
+          PORT: 3000
+          LOG_LEVEL: warn
+
       - name: E2E tests
         run: pnpm test:e2e
         env:
           CI: "true"
+          API_URL: http://localhost:3000
+
+      - name: Stop server
+        if: always()
+        run: |
+          if [ -f /tmp/server.pid ]; then
+            kill $(cat /tmp/server.pid) 2>/dev/null || true
+          fi
 
       - name: Security audit (npm audit)
         run: |
