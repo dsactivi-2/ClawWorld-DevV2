@@ -57,29 +57,27 @@ RUN apk add --no-cache \
       curl \
       postgresql-client
 
-# Create a non-root user/group
-RUN addgroup -g 1000 appuser && \
-    adduser -u 1000 -G appuser -s /bin/sh -D appuser
-
+# node:20-alpine ships with a built-in "node" user (UID/GID 1000).
+# Re-using it avoids the "GID 1000 already taken" error from addgroup.
 WORKDIR /app
 
 # Copy production node_modules from stage 1
-COPY --from=dependencies --chown=appuser:appuser /app/node_modules ./node_modules
+COPY --from=dependencies --chown=node:node /app/node_modules ./node_modules
 
 # Copy compiled output from stage 2
-COPY --from=builder --chown=appuser:appuser /app/dist ./dist
+COPY --from=builder --chown=node:node /app/dist ./dist
 
 # Copy runtime-required directories
-COPY --chown=appuser:appuser config/ ./config/
-COPY --chown=appuser:appuser agents/ ./agents/
-COPY --chown=appuser:appuser tools/ ./tools/
-COPY --chown=appuser:appuser package.json ./
+COPY --chown=node:node config/ ./config/
+COPY --chown=node:node agents/ ./agents/
+COPY --chown=node:node tools/ ./tools/
+COPY --chown=node:node package.json ./
 
-# Ensure log directory exists and is writable
-RUN mkdir -p /app/logs && chown appuser:appuser /app/logs
+# Ensure log directory exists and is writable by the node user
+RUN mkdir -p /app/logs && chown node:node /app/logs
 
-# Switch to non-root user
-USER appuser
+# Switch to non-root user (built-in, UID 1000)
+USER node
 
 # Prometheus metrics port + application port
 EXPOSE 3000 9090
