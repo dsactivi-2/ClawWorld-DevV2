@@ -200,9 +200,9 @@ CREATE TABLE IF NOT EXISTS langgraph_states (
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TRIGGER trg_langgraph_states_updated_at
-    BEFORE UPDATE ON langgraph_states
-    FOR EACH ROW EXECUTE FUNCTION trigger_set_updated_at();
+-- Note: no trigger on langgraph_states — updated_at is managed
+-- explicitly by GraphMemoryManager (ON CONFLICT DO UPDATE SET updated_at = NOW()).
+-- A trigger would override intentional back-dated writes (e.g. cleanup tests).
 
 -- -------------------------------------------------------
 -- TABLE: langgraph_edges
@@ -249,7 +249,6 @@ CREATE TABLE IF NOT EXISTS langgraph_step_history (
 /*
 DOWN:
 
-DROP TRIGGER IF EXISTS trg_langgraph_states_updated_at ON langgraph_states;
 DROP TRIGGER IF EXISTS trg_audit_log_no_delete      ON audit_log;
 DROP TRIGGER IF EXISTS trg_audit_log_no_update      ON audit_log;
 DROP TRIGGER IF EXISTS trg_workflows_updated_at     ON workflows;
