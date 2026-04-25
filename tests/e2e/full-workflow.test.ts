@@ -9,7 +9,7 @@
  *   API_URL=http://localhost:3000 jest --testPathPattern=tests/e2e --runInBand --forceExit
  */
 
-import axios, { AxiosInstance, AxiosError } from 'axios';
+import axios, { type AxiosInstance } from 'axios';
 
 // ---------------------------------------------------------------------------
 // Config
@@ -35,31 +35,6 @@ function makeClient(baseURL: string, token?: string): AxiosInstance {
 }
 
 const client = makeClient(API_URL);
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function isAxiosError(err: unknown): err is AxiosError {
-  return axios.isAxiosError(err);
-}
-
-async function waitForStatus(
-  workflowId: string,
-  desiredStatuses: string[],
-  maxWaitMs = 30_000,
-  pollIntervalMs = 1_000,
-): Promise<string> {
-  const deadline = Date.now() + maxWaitMs;
-  while (Date.now() < deadline) {
-    const res = await client.get(`/api/workflows/${workflowId}/status`);
-    if (res.status === 200 && desiredStatuses.includes(res.data?.status)) {
-      return res.data.status as string;
-    }
-    await new Promise((r) => setTimeout(r, pollIntervalMs));
-  }
-  throw new Error(`Workflow ${workflowId} did not reach status ${desiredStatuses.join('|')} within ${maxWaitMs}ms`);
-}
 
 // ---------------------------------------------------------------------------
 // E2E test suite

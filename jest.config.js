@@ -130,7 +130,6 @@ const config = {
       moduleNameMapper: {
         '^@/(.*)$': '<rootDir>/src/$1',
       },
-      testTimeout: 60000,
     },
     {
       displayName: 'e2e',
@@ -149,7 +148,6 @@ const config = {
       moduleNameMapper: {
         '^@/(.*)$': '<rootDir>/src/$1',
       },
-      testTimeout: 120000,
     },
   ],
 };
