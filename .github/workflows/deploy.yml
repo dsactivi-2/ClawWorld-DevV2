@@ -131,7 +131,11 @@ jobs:
             --namespace="${{ env.STAGING_NAMESPACE }}" \
             -l app.kubernetes.io/name=postgres \
             --field-selector=status.phase=Running \
-            -o jsonpath='{.items[0].metadata.name}')
+            -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+          if [[ -z "${PG_POD}" ]]; then
+            echo "No Postgres pod found in ${STAGING_NAMESPACE} — skipping migrations (namespace not yet bootstrapped)"
+            exit 0
+          fi
           echo "Postgres pod: ${PG_POD}"
           for migration in sql/migrations/*.sql; do
             [[ -f "${migration}" ]] || continue
@@ -238,7 +242,11 @@ jobs:
             --namespace="${{ env.NAMESPACE }}" \
             -l app.kubernetes.io/name=postgres \
             --field-selector=status.phase=Running \
-            -o jsonpath='{.items[0].metadata.name}')
+            -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+          if [[ -z "${PG_POD}" ]]; then
+            echo "No Postgres pod found in ${NAMESPACE} — skipping migrations (namespace not yet bootstrapped)"
+            exit 0
+          fi
           echo "Postgres pod: ${PG_POD}"
           for migration in sql/migrations/*.sql; do
             [[ -f "${migration}" ]] || continue
