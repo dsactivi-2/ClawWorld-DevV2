@@ -41,7 +41,7 @@ const log = createLogger('LangGraphOrchestrator');
 // the native name, e.g. "claude-sonnet-4-6".
 // ---------------------------------------------------------------------------
 
-const MODEL_BUILDER   = process.env['ANTHROPIC_MODEL_BUILDER']   ?? 'anthropic/claude-sonnet-4-5';
+const MODEL_BUILDER = process.env['ANTHROPIC_MODEL_BUILDER'] ?? 'anthropic/claude-sonnet-4-5';
 const MODEL_SUPERVISOR = process.env['ANTHROPIC_MODEL_SUPERVISOR'] ?? 'anthropic/claude-sonnet-4-5';
 
 // ---------------------------------------------------------------------------
