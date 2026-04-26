@@ -243,6 +243,15 @@ jobs:
       - name: Verify cluster connectivity
         run: kubectl cluster-info --request-timeout=10s
 
+      - name: Create Docker Hub pull secret
+        run: |
+          kubectl create secret docker-registry dockerhub-pull-secret \
+            --docker-server=docker.io \
+            --docker-username="${{ secrets.DOCKERHUB_USERNAME }}" \
+            --docker-password="${{ secrets.DOCKERHUB_TOKEN }}" \
+            --namespace="${{ env.NAMESPACE }}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
       - name: Apply manifests
         run: |
           set -euo pipefail

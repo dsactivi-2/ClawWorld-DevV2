@@ -33,6 +33,8 @@ spec:
         prometheus.io/path: "/metrics"
     spec:
       serviceAccountName: openclaw-gateway
+      imagePullSecrets:
+        - name: dockerhub-pull-secret
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
