@@ -18,6 +18,14 @@ type PoolConfig = ConstructorParameters<typeof Pool>[0] & { max?: number };
 
 let _poolConfig: PoolConfig | null = null;
 
+function parseOptionalBool(value: string | undefined): boolean | undefined {
+  if (value === undefined) return undefined;
+  const normalised = value.trim().toLowerCase();
+  if (['1', 'true', 'yes', 'y', 'on'].includes(normalised)) return true;
+  if (['0', 'false', 'no', 'n', 'off'].includes(normalised)) return false;
+  throw new Error(`Invalid boolean value "${value}"`);
+}
+
 function buildConnectionConfig(): PoolConfig {
   if (_poolConfig) {
     return _poolConfig;
@@ -26,6 +34,8 @@ function buildConnectionConfig(): PoolConfig {
   const url = process.env['DATABASE_URL'];
   const isProduction = process.env['NODE_ENV'] === 'production';
   const poolMax = parseInt(process.env['DB_POOL_MAX'] ?? '20', 10);
+  const sslEnabled = parseOptionalBool(process.env['DB_SSL']) ?? isProduction;
+  const sslRejectUnauthorized = parseOptionalBool(process.env['DB_SSL_REJECT_UNAUTHORIZED']) ?? true;
 
   if (url) {
     _poolConfig = {
@@ -33,7 +43,7 @@ function buildConnectionConfig(): PoolConfig {
       max: poolMax,
       idleTimeoutMillis: 30_000,
       connectionTimeoutMillis: 5_000,
-      ssl: isProduction ? { rejectUnauthorized: true } : false,
+      ssl: sslEnabled ? { rejectUnauthorized: sslRejectUnauthorized } : false,
     };
     return _poolConfig;
   }
@@ -52,7 +62,7 @@ function buildConnectionConfig(): PoolConfig {
     max: poolMax,
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 5_000,
-    ssl: isProduction ? { rejectUnauthorized: true } : false,
+    ssl: sslEnabled ? { rejectUnauthorized: sslRejectUnauthorized } : false,
   };
   return _poolConfig;
 }

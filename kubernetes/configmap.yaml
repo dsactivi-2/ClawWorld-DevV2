@@ -17,6 +17,7 @@ data:
   DB_PORT: "5432"
   DB_NAME: "openclaw_teams"
   DB_USER: "openclaw"
+  DB_SSL: "false"
 
   # Redis
   REDIS_HOST: "redis-0.redis.openclaw-production.svc.cluster.local"
