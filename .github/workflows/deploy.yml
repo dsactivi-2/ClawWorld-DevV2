@@ -257,8 +257,7 @@ jobs:
             kubernetes/hpa.yaml \
             kubernetes/networkpolicy.yaml; do
             echo "Applying ${manifest}..."
-            kubectl apply -f "${manifest}" --namespace="${{ env.NAMESPACE }}" || \
-              echo "::warning::Failed to apply ${manifest} — continuing"
+            kubectl apply -f "${manifest}" --namespace="${{ env.NAMESPACE }}"
           done
 
       - name: Run database migrations (production)
