@@ -120,7 +120,7 @@ spec:
         resources:
           requests:
             storage: 5Gi
-        storageClassName: standard
+        storageClassName: hcloud-volumes
 ---
 apiVersion: v1
 kind: Service

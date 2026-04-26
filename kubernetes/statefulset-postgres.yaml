@@ -111,7 +111,7 @@ spec:
         resources:
           requests:
             storage: 20Gi
-        storageClassName: standard
+        storageClassName: hcloud-volumes
 ---
 apiVersion: v1
 kind: Service
