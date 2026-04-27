@@ -45,6 +45,14 @@ spec:
         - protocol: TCP
           port: 9090
   egress:
+    # Allow response traffic back to ingress controller pods (stateful behaviour can vary by CNI)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: envoy-gateway-system
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
     # Allow DNS resolution
     - ports:
         - protocol: UDP
