@@ -222,6 +222,50 @@ async function createApp(): Promise<{
   // -------------------------------------------------------------------------
   // API routes
   // -------------------------------------------------------------------------
+  app.get('/', (_req: Request, res: Response) => {
+    res
+      .status(200)
+      .type('html')
+      .send(`<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OpenClaw Teams</title>
+    <style>
+      :root { color-scheme: light dark; }
+      body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; margin: 0; }
+      .wrap { max-width: 920px; margin: 48px auto; padding: 0 20px; }
+      .card { border: 1px solid rgba(127,127,127,.35); border-radius: 14px; padding: 18px 18px; }
+      h1 { margin: 0 0 6px; font-size: 28px; }
+      p { margin: 8px 0; line-height: 1.45; opacity: .9; }
+      code { padding: 2px 6px; border-radius: 8px; border: 1px solid rgba(127,127,127,.35); }
+      .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin-top: 14px; }
+      a { color: inherit; }
+      .btn { display: block; padding: 12px 12px; border-radius: 12px; border: 1px solid rgba(127,127,127,.35); text-decoration: none; }
+      .btn:hover { border-color: rgba(127,127,127,.65); }
+      .muted { opacity: .8; font-size: 14px; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="card">
+        <h1>OpenClaw Teams</h1>
+        <p>Gateway is running. This page is a minimal UI placeholder so <code>/</code> is not a JSON 404.</p>
+        <p class="muted">UI features (login/dashboard) aren’t implemented in this repo yet. Use the API endpoints below.</p>
+        <div class="grid">
+          <a class="btn" href="/health">/health</a>
+          <a class="btn" href="/metrics">/metrics</a>
+          <a class="btn" href="/api/workflows">/api/workflows</a>
+          <a class="btn" href="/api/agents">/api/agents</a>
+          <a class="btn" href="/api/teams">/api/teams</a>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>`);
+  });
+
   app.use('/api/workflows', createWorkflowRouter({ orchestrator, memoryManager }));
   app.use('/api/agents', createAgentsRouter({ teamSkill }));
   app.use('/api/teams', createTeamsRouter({ teamSkill }));
