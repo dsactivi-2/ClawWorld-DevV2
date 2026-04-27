@@ -89,11 +89,43 @@ function getAnthropicClient(): Anthropic {
   if (_anthropicClient) {
     return _anthropicClient;
   }
-  const apiKey = process.env['ANTHROPIC_API_KEY'];
-  if (!apiKey) {
-    throw new Error('ANTHROPIC_API_KEY environment variable is not set');
+  const baseURL = process.env['ANTHROPIC_BASE_URL'] ?? null;
+  const isOpenRouter = typeof baseURL === 'string' && baseURL.includes('openrouter.ai');
+
+  if (isOpenRouter) {
+    const token =
+      process.env['OPENROUTER_API_KEY'] ??
+      process.env['ANTHROPIC_AUTH_TOKEN'] ??
+      process.env['ANTHROPIC_API_KEY'] ??
+      null;
+    if (!token) {
+      throw new Error(
+        'OpenRouter mode: expected OPENROUTER_API_KEY, ANTHROPIC_AUTH_TOKEN, or ANTHROPIC_API_KEY to be set',
+      );
+    }
+
+    const defaultHeaders: Record<string, string> = {};
+    const referrer = process.env['OPENROUTER_REFERRER'];
+    const title = process.env['OPENROUTER_TITLE'];
+    if (referrer) defaultHeaders['HTTP-Referer'] = referrer;
+    if (title) defaultHeaders['X-Title'] = title;
+
+    _anthropicClient = new Anthropic({
+      baseURL,
+      authToken: token,
+      apiKey: null,
+      defaultHeaders,
+    });
+    return _anthropicClient;
   }
-  _anthropicClient = new Anthropic({ apiKey });
+
+  const apiKey = process.env['ANTHROPIC_API_KEY'] ?? null;
+  const authToken = process.env['ANTHROPIC_AUTH_TOKEN'] ?? null;
+  if (!apiKey && !authToken) {
+    throw new Error('Expected ANTHROPIC_API_KEY or ANTHROPIC_AUTH_TOKEN environment variable to be set');
+  }
+
+  _anthropicClient = new Anthropic({ baseURL, apiKey, authToken });
   return _anthropicClient;
 }
 

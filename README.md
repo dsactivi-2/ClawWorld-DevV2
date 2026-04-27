@@ -70,7 +70,7 @@ A production-grade multi-agent build system powered by Anthropic Claude and Lang
 git clone https://github.com/your-org/openclaw-teams.git
 cd openclaw-teams
 cp .env.example .env
-# Edit .env — set ANTHROPIC_API_KEY and DB_PASSWORD at minimum
+# Edit .env — set OPENROUTER_API_KEY (recommended) and DB_PASSWORD at minimum
 
 # 2. Start all services
 docker compose -f docker/docker-compose.production.yml up -d
@@ -115,7 +115,8 @@ Copy `.env.example` to `.env` and configure each variable:
 
 ```bash
 # Minimum required
-ANTHROPIC_API_KEY=sk-ant-...          # Anthropic API key
+ANTHROPIC_BASE_URL=https://openrouter.ai/api/v1   # OpenRouter (recommended)
+OPENROUTER_API_KEY=sk-or-v1-...                   # OpenRouter API key
 DATABASE_URL=postgresql://...          # PostgreSQL connection string
 PORT=3000                              # HTTP server port
 

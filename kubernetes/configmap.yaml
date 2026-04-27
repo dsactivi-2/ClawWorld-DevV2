@@ -36,3 +36,8 @@ data:
   AGENT_CONCURRENCY: "4"
   AGENT_TIMEOUT_MS: "120000"
   MAX_PAYLOAD_BYTES: "10485760"
+
+  # LLM Provider (OpenRouter)
+  ANTHROPIC_BASE_URL: "https://openrouter.ai/api/v1"
+  OPENROUTER_REFERRER: ""
+  OPENROUTER_TITLE: "OpenClaw Teams"
