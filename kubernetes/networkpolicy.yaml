@@ -1,5 +1,5 @@
 ---
-# Allow openclaw-gateway to receive traffic only from nginx ingress namespace
+# Allow openclaw-gateway to receive traffic only from the ingress controller namespace(s)
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -17,8 +17,16 @@ spec:
     - Ingress
     - Egress
   ingress:
-    # Accept HTTP traffic from nginx ingress namespace only
+    # Accept HTTP traffic from ingress controller namespaces only
     - from:
+        # Envoy Gateway (default in this cluster)
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: envoy-gateway-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: envoy
+        # NGINX Ingress (optional / other clusters)
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: ingress-nginx
