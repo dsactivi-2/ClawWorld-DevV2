@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# upgrade.sh — Zero-downtime rolling upgrade for openclaw-teams
+# upgrade.sh — Zero-downtime rolling upgrade for openclaw-cwdev
 # Usage: [IMAGE_TAG=v1.2.3] ./upgrade.sh
 # =============================================================================
 set -euo pipefail
@@ -31,7 +31,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 REGISTRY="${REGISTRY:-ghcr.io/clawworld}"
-IMAGE_NAME="${IMAGE_NAME:-openclaw-teams}"
+IMAGE_NAME="${IMAGE_NAME:-openclaw-cwdev}"
 IMAGE_TAG="${IMAGE_TAG:-latest}"
 FULL_IMAGE="${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
 
