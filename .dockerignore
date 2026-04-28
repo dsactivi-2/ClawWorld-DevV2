@@ -1,0 +1,10 @@
+.git
+.github
+.serena
+.tmp
+coverage
+dist
+logs
+node_modules
+*.log
+.DS_Store
